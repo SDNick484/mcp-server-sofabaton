@@ -1,7 +1,8 @@
 """End to end: the installed entry point over stdio.
 
-No sofabaton-x-server is running, so list_tools works and get_status returns
-the "can't reach" error, which is the behavior we want when it's down.
+No sofabaton-x-server is running, so list_tools works and get_status answers
+with a "can't reach" limitation (not an error: it's the tool the model calls
+first, so it has to explain the problem rather than fail).
 """
 
 from __future__ import annotations
@@ -28,4 +29,8 @@ async def test_serve_over_stdio():
     async with Client(StdioServerParameters(command=exe, args=[], env=env)) as c:
         assert {t.name for t in (await c.list_tools()).tools} == TOOL_NAMES
         result = await c.call_tool("get_status", {})
-        assert result.is_error and "Can't reach sofabaton-x-server at http://127.0.0.1:9" in result.content[0].text
+        assert not result.is_error
+        st = result.structured_content
+        assert st["via"] is None and st["server"]["reachable"] is False
+        # Logs and tool output both redact addresses; the loopback's last octet survives.
+        assert any("Can't reach sofabaton-x-server" in lim for lim in st["limitations"])

@@ -13,7 +13,7 @@ allow-list is a second, local wall in front of them.
 from __future__ import annotations
 
 import re
-from typing import Any, Literal, cast
+from typing import Any, Literal, NotRequired, cast
 
 import httpx
 from mcp.server.mcpserver.exceptions import ToolError
@@ -59,20 +59,21 @@ class HubStatusView(TypedDict):
 
 class HubConfig(TypedDict):
     host: str
-    name: str | None
+    name: NotRequired[str | None]  # optional in the schema: may be absent, so read it with .get()
 
 
 class HubView(TypedDict):
     hub_id: str
     enabled: bool
     config: HubConfig
-    hub_name: str | None
+    hub_name: NotRequired[str | None]  # optional in the schema
 
 
 class HubInfo(TypedDict):
     known: bool
     model: str | None
     name: str | None
+    mac: str | None
     firmware_version: int | None
     firmware_outdated: bool
 
@@ -160,6 +161,15 @@ class ServerAPI:
         return resp.json() if resp.content else None
 
     # --- reads -------------------------------------------------------------
+    async def version(self) -> str:
+        """The server's version, from its OpenAPI document."""
+        doc = await self._request("GET", "/openapi.json")
+        return str((doc or {}).get("info", {}).get("version", "unknown"))
+
+    async def auth_claimed(self) -> bool:
+        """Whether an admin account exists. Unclaimed, the server lets anyone on the LAN write."""
+        return bool((await self._request("GET", "/auth") or {}).get("claimed"))
+
     async def hubs(self) -> list[HubView]:
         return cast(list[HubView], await self._request("GET", "/hubs"))
 

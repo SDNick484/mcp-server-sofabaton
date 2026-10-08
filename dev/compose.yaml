@@ -1,0 +1,15 @@
+# A local mosquitto for running the MQTT tests (or `simulate --broker`) against a
+# real broker, the way CI does:
+#
+#   docker compose -f dev/compose.yaml up -d
+#   MQTT_TEST_BROKER=mqtt://127.0.0.1:1883 pytest tests/test_mqtt.py -rs
+#   mcp-server-sofabaton simulate --broker mqtt://127.0.0.1:1883
+#
+# Anonymous and bound to loopback: for tests only, never for your real X2.
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "127.0.0.1:1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
