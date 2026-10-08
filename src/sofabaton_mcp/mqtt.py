@@ -80,6 +80,9 @@ class MqttHub:
         self.instance_id = secrets.token_hex(8)
         self._seq = 0
         self._presses: deque[Press] = deque(maxlen=self.ring_size)
+        # doctor --dump sets this to a list to capture every message as received (MAC replaced by <MAC>),
+        # so a recording shows what the X2 really sends, not what our parsers made of it.
+        self.raw_log: list[dict[str, Any]] | None = None
 
     @property
     def broker(self) -> str:
@@ -155,6 +158,8 @@ class MqttHub:
         except (TypeError, ValueError):
             log.warning("MQTT: ignoring a message that isn't JSON on %s", topic)
             return
+        if self.raw_log is not None:
+            self.raw_log.append({"topic": topic.replace(self.mac, "<MAC>"), "payload": payload})
         if topic == self.t["state_up"]:
             self._on_state(payload)
         elif topic == self.t["press_up"]:

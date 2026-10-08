@@ -12,9 +12,10 @@ When the X2 doesn't answer on the UPPERCASE-MAC topics, doctor also tries the
 lowercase MAC and reports which one worked: that settles ASSUMPTION
 S-MQTT-MAC-CASE on your hub either way.
 
-`--dump DIR` writes what both paths return (catalog, lists, raw MQTT replies)
-to DIR/sofabaton.json with the MAC and addresses redacted, for
-tests/fixtures/recorded/.
+`--dump DIR` writes what both paths return to DIR/sofabaton.json, with the MAC
+and addresses redacted: the server's catalog, and every MQTT message as the
+X2 sent it (one reply of each list type). Copy it to tests/fixtures/recorded/
+and test_recorded.py replays it through the real parsers.
 """
 
 from __future__ import annotations
@@ -159,6 +160,7 @@ async def _mqtt_checks(
     async def probe(candidate: str) -> tuple[MqttHub, list[tuple[int, str, bool]] | None]:
         hub = MqttHub(settings.mqtt, candidate, factory)  # type: ignore[arg-type]
         hub.reply_timeout = timeout
+        hub.raw_log = []
         await hub.start()
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
@@ -213,7 +215,25 @@ async def _mqtt_checks(
         report.checks.append(
             Check("x2", True, f"answered over MQTT: {len(acts)} activities, running: {on[0] if on else 'nothing'}")
         )
-        dump["mqtt"] = {"activities": acts, "devices": await hub.devices()}
+        devs = await hub.devices()
+        # One of each list request, so a --dump holds every reply shape the X2 sends (S-MQTT-LISTS).
+        if acts:
+            first_activity = acts[0][0]
+            for what, call in (
+                ("keys_request", hub.activity_keys),
+                ("macro_keys_request", hub.macros),
+                ("favorites_keys_request", hub.favorites),
+            ):
+                try:
+                    await call(first_activity)
+                except SofabatonError:
+                    report.warnings.append(f"The X2 didn't answer activity/<MAC>/{what} (S-MQTT-LISTS).")
+        if devs:
+            try:
+                await hub.device_keys(devs[0][0])
+            except SofabatonError:
+                report.warnings.append("The X2 didn't answer device/<MAC>/keys_request (S-MQTT-LISTS).")
+        dump["mqtt"] = {"activities": acts, "devices": devs, "raw": hub.raw_log}
     finally:
         await hub.stop()
 
