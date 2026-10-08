@@ -1,23 +1,36 @@
 """Settings, and the button allow-list.
 
-This server doesn't talk to the hub itself. It talks to sofabaton-x-server, the
-REST server that owns the hub connection (see README "Why go through
-sofabaton-x-server"). So the settings are where that server is and, if it
-manages more than one hub, which one to use.
+Two ways to reach a hub, and you can configure either or both:
 
-There is deliberately no setting for an API token. sofabaton-x-server lets
-anyone on the LAN read and *control* (send, start/stop activities, find the
-remote) without one, and requires a token only for *writes*: editing,
-deleting, erasing and restoring the hub. Never holding a token means a
-confused or prompt-injected model can't reach those routes through us, no
-matter what tool code someday tries.
+  sofabaton-x-server (SOFABATON_URL)  any model: X1, X1S, X2. The REST server
+      owns the hub connection through the community sofabaton-x library.
+  MQTT (SOFABATON_MQTT_URL)           X2 only. The hub's own MQTT support
+      (Sofabaton app: Me -> Connect to Home Assistant) talking to your broker.
+
+Both on an X2 is the fullest setup: REST for everything, MQTT for live
+activity state, presses, and control while the Sofabaton app holds the REST
+proxy. MQTT alone works with no server at all. With neither set, the default
+is a server on localhost:8480 (the original behavior).
+
+There is deliberately no setting for a sofabaton-x-server API token. The server
+lets anyone on the LAN read and *control* (send, start/stop, find the remote)
+without one, and requires a token only for *writes*: editing, deleting,
+erasing and restoring the hub. Never holding a token means a confused or
+prompt-injected model can't reach those routes through us.
+
+Loading never fails: problems become sentences in ``Settings.problems``
+(logged at startup, shown by `doctor`) and the broken part is left out.
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal, get_args
+from urllib.parse import unquote, urlparse
+
+from .protocol import normalize_mac
 
 DEFAULT_URL = "http://localhost:8480"
 
@@ -118,11 +131,103 @@ BUTTON_CODES: dict[str, int] = {
 
 
 @dataclass(frozen=True)
+class MqttSettings:
+    host: str
+    port: int
+    tls: bool
+    username: str | None
+    password: str | None = field(repr=False)  # never printed
+    mac: str | None  # the X2's MAC, uppercase bare hex; None: learn it from sofabaton-x-server
+
+
+@dataclass(frozen=True)
 class Settings:
-    url: str
-    hub: str | None  # hub id or name; None = the only hub the server has
+    url: str | None  # sofabaton-x-server; None: MQTT only
+    hub: str | None  # hub id or name on that server; None = its only hub
+    mqtt: MqttSettings | None = None
+    dry_run: bool = False
+    # In MQTT-only mode the hub announces an activity change early in its power
+    # macro and never says when the macro is done, so presses are held off this
+    # long after a change. ASSUMPTION S-MQTT-SETTLE
+    settle_s: float = 6.0
+    problems: tuple[str, ...] = ()
+
+
+def _flag(value: str | None) -> bool:
+    return (value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _mqtt(env: dict[str, str] | os._Environ[str], problems: list[str]) -> MqttSettings | None:
+    raw = env.get("SOFABATON_MQTT_URL")
+    if not raw:
+        return None
+    u = urlparse(raw if "://" in raw else f"mqtt://{raw}")
+    if u.scheme not in ("mqtt", "mqtts") or not u.hostname:
+        problems.append(
+            f"SOFABATON_MQTT_URL must look like mqtt://[user:pass@]host[:1883] or mqtts://...; got scheme {u.scheme!r}"
+        )
+        return None
+    try:
+        port = u.port or (8883 if u.scheme == "mqtts" else 1883)
+    except ValueError:
+        problems.append("SOFABATON_MQTT_URL has an invalid port")
+        return None
+    password = unquote(u.password) if u.password else env.get("SOFABATON_MQTT_PASSWORD")
+    pw_file = env.get("SOFABATON_MQTT_PASSWORD_FILE")
+    if pw_file:
+        try:
+            password = Path(pw_file).read_text().strip()
+        except OSError as exc:
+            problems.append(f"can't read SOFABATON_MQTT_PASSWORD_FILE: {exc.strerror}")
+    username = unquote(u.username) if u.username else env.get("SOFABATON_MQTT_USERNAME")
+    mac = None
+    if raw_mac := env.get("SOFABATON_MQTT_MAC"):
+        mac = normalize_mac(raw_mac)
+        if mac is None:
+            problems.append(f"SOFABATON_MQTT_MAC {raw_mac!r} isn't a MAC address (12 hex digits)")
+    try:
+        import aiomqtt  # noqa: F401
+    except ImportError:
+        problems.append("MQTT is configured but aiomqtt isn't installed: pip install 'mcp-server-sofabaton[mqtt]'")
+        return None
+    return MqttSettings(u.hostname, port, u.scheme == "mqtts", username, password, mac)
 
 
 def load_settings() -> Settings:
-    url = (os.environ.get("SOFABATON_URL") or DEFAULT_URL).rstrip("/")
-    return Settings(url=url, hub=os.environ.get("SOFABATON_HUB") or None)
+    env = os.environ
+    problems: list[str] = []
+    mqtt = _mqtt(env, problems)
+    url_env = env.get("SOFABATON_URL")
+    if url_env and url_env.strip().lower() == "none":
+        url: str | None = None
+    elif url_env:
+        url = url_env.rstrip("/")
+    else:
+        # The original default, unless MQTT is set up on its own.
+        url = None if mqtt is not None else DEFAULT_URL
+    if url is not None and urlparse(url).scheme not in ("http", "https"):
+        problems.append(f"SOFABATON_URL {url!r} should start with http:// or https://; ignoring it")
+        url = None
+    if mqtt is not None and url is None and mqtt.mac is None:
+        problems.append(
+            "MQTT without sofabaton-x-server needs the X2's MAC: set SOFABATON_MQTT_MAC (your router's client list "
+            "shows it; with a server configured, `doctor` prints it)"
+        )
+    settle_raw = env.get("SOFABATON_MQTT_SETTLE_S")
+    settle = 6.0
+    if settle_raw:
+        try:
+            settle = float(settle_raw)
+            if not 0 <= settle <= 120:
+                raise ValueError
+        except ValueError:
+            problems.append(f"SOFABATON_MQTT_SETTLE_S {settle_raw!r} should be seconds, 0-120; using 6")
+            settle = 6.0
+    return Settings(
+        url=url,
+        hub=env.get("SOFABATON_HUB") or None,
+        mqtt=mqtt,
+        dry_run=_flag(env.get("SOFABATON_DRY_RUN")),
+        settle_s=settle,
+        problems=tuple(problems),
+    )
