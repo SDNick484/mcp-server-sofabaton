@@ -32,13 +32,19 @@ Homepage = "https://github.com/SDNick484/mcp-server-sofabaton"
 Issues = "https://github.com/SDNick484/mcp-server-sofabaton/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "anyio>=4", "ruff>=0.6", "mypy>=1.11", "sofabaton-x>=0.2.3,<0.3", "httpx2"]
+# X2 MQTT support. aiomqtt is the asyncio wrapper around paho-mqtt (Eclipse),
+# the most widely used Python MQTT client; neither pulls in anything else.
+mqtt = ["aiomqtt>=2.3,<3"]
+dev = ["aiomqtt>=2.3,<3", "pytest>=8", "anyio>=4", "ruff>=0.6", "mypy>=1.11", "sofabaton-x>=0.2.3,<0.3", "httpx2"]
 
 [project.scripts]
 mcp-server-sofabaton = "sofabaton_mcp.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"sofabaton_mcp.sim" = ["fixtures/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

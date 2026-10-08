@@ -22,3 +22,22 @@ jobs:
       - run: ruff format --check .
       - run: mypy
       - run: pytest
+
+  # The MQTT tests again, against a real broker instead of the in-package one,
+  # so a quirk of our test broker can't hide a bug (or fake one). Tests that
+  # need the in-package broker's hooks (forced disconnects, retained-message
+  # injection, per-test auth) skip themselves here.
+  mqtt-mosquitto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: sudo apt-get update && sudo apt-get install -y mosquitto
+      # With no config file, mosquitto 2 listens on loopback only and allows anonymous clients.
+      - run: mosquitto -d -p 1883
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/test_mqtt.py tests/test_tools.py tests/test_tooling.py -rs
+        env:
+          MQTT_TEST_BROKER: mqtt://127.0.0.1:1883
