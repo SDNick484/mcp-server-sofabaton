@@ -124,7 +124,7 @@ def _names(items: list[str]) -> str:
 class SofabatonClient:
     # The hub runs an activity's power macro (devices on, inputs set, delays)
     # before reporting it running.
-    activity_timeout = 30.0
+    activity_timeout = 30.0  # how long a power macro may take before we say so. ASSUMPTION S-REST-START
     poll_interval = 0.5
     repeat_gap = 0.3  # default pause between repeated presses
     identity_retry = 30.0  # seconds between attempts to learn model/MAC from the server

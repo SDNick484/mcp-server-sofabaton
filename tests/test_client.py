@@ -93,6 +93,7 @@ async def test_unreachable_server_is_a_limitation_not_a_crash(make, fake):
 
 # --- activities --------------------------------------------------------------------------
 async def test_start_waits_for_the_macro(make, fake):
+    """S-REST-START: confirmed by GET /activity, not by `accepted`."""
     fake.settle_reads = 3  # the server still reports the old state for three reads
     c = make()
     outcome, _ = await c.start_activity("watch shield")
