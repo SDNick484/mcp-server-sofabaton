@@ -124,6 +124,10 @@ async def test_power_off(make, fake):
 
 async def test_observe_mode_on_an_x2_without_mqtt_suggests_mqtt(make, fake):
     fake.mode = "observe"
+    st = await make().status()
+    # Reads still work; nothing that sends does.
+    assert st["capabilities"] == ["catalog", "presses", "hub_info"]
+    assert any("commands are refused until it's closed" in lim for lim in st["limitations"])
     with pytest.raises(
         SofabatonError, match="close the app.*setting up MQTT .SOFABATON_MQTT_URL. would keep it controllable"
     ):

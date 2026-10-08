@@ -308,14 +308,28 @@ class SofabatonClient:
 
     # --- status -------------------------------------------------------------------------------
     def _capabilities(self, sv: _ServerView | None) -> tuple[list[str], list[str]]:
+        """What works on this hub right now, and what doesn't (with what would fix it).
+
+        Capability names: catalog (list activities/devices/commands), activities (start/power off), buttons,
+        commands, presses, find_remote, hub_info (model/firmware), live_activity_state and
+        control_while_app_open (both X2 over MQTT).
+        """
         server_ok = sv is not None and sv.reachable and sv.status is not None and sv.status["hub_connected"]
+        observe = server_ok and sv is not None and sv.status is not None and sv.status["mode"] == "observe"
+        server_control = server_ok and not observe
         mqtt_ok = self._mqtt_ok()
         caps: list[str] = []
         limits: list[str] = []
         if server_ok or mqtt_ok:
-            caps += ["activities", "buttons", "commands", "presses"]
+            caps += ["catalog"]
+        if server_control or mqtt_ok:
+            caps += ["activities", "buttons", "commands"]
+        if server_ok or mqtt_ok:
+            caps += ["presses"]
+        if server_control:
+            caps += ["find_remote"]
         if server_ok:
-            caps += ["find_remote", "hub_info"]
+            caps += ["hub_info"]
         if mqtt_ok:
             caps += ["live_activity_state", "control_while_app_open"]
         if self.model in ("X1", "X1S"):
@@ -336,8 +350,16 @@ class SofabatonClient:
             )
         elif not server_ok:
             limits.append(f"sofabaton-x-server: {sv.error if sv and sv.error else 'no session with the hub'}")
-        if sv is not None and sv.status is not None and sv.status["mode"] == "observe" and not mqtt_ok:
-            limits.append("The Sofabaton app holds the proxy (observe mode): commands are refused until it's closed.")
+        if observe and mqtt_ok:
+            limits.append(
+                "The Sofabaton app holds sofabaton-x-server's proxy (observe mode): commands go over MQTT meanwhile, "
+                "and find_remote waits until the app is closed."
+            )
+        elif observe:
+            limits.append(
+                "The Sofabaton app holds the proxy (observe mode): reads work, but commands are refused until it's "
+                "closed on every phone and tablet."
+            )
         return caps, limits
 
     async def status(self) -> Status:

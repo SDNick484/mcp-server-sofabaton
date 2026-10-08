@@ -220,7 +220,11 @@ async def test_hybrid_keeps_control_while_the_app_is_open(make, x2, server, stat
     """The headline X2 feature: the app holds the proxy (observe), MQTT takes over."""
     c = await connected(await make(server=server, settle_s=0))
     server.mode = "observe"
-    assert (await c.status())["via"] == "mqtt"
+    st = await c.status()
+    assert st["via"] == "mqtt"
+    # The model is told what still works and what waits for the app to close.
+    assert "control_while_app_open" in st["capabilities"] and "find_remote" not in st["capabilities"]
+    assert any("commands go over MQTT meanwhile" in lim for lim in st["limitations"])
     outcome, _ = await c.start_activity("Listen to Music")
     assert outcome.via == "mqtt" and state.executed[-1] == Executed("mqtt", "start", 102)
     await c.press("VOL_UP", None)

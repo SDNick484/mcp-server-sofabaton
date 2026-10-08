@@ -136,9 +136,11 @@ DelayMs = Annotated[
 async def get_status() -> Status:
     """Start here. The hub's model, running activity, and what it can do right now.
 
-    capabilities lists what works on this hub now (e.g. find_remote, live_activity_state); limitations says
-    what doesn't and how to enable it. via is how commands would be sent: "server" (sofabaton-x-server, any
-    model) or "mqtt" (X2 only). transition is non-null while an X2's power macro may still be running.
+    capabilities lists what works on this hub now: catalog (the list_* tools), activities, buttons, commands,
+    presses, find_remote, hub_info, and on an X2 over MQTT live_activity_state and control_while_app_open.
+    limitations says what doesn't work and how to enable it. via is how commands would be sent: "server"
+    (sofabaton-x-server, any model) or "mqtt" (X2 only). transition is non-null while an X2's power macro
+    may still be running.
     """
     return await client().status()
 
