@@ -235,6 +235,18 @@ def test_simulate_then_check(simulator):
     assert "live_activity_state" in done.stdout and "  Watch Shield" in done.stdout
 
 
+def test_call_runs_a_tool_like_the_model_would(simulator):
+    sim_env = simulator()
+    done = run("call", sim_env, "start_activity", "activity=Watch Shield")
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout)["outcome"] == "done"
+    done = run("call", sim_env, "press_button", "button=VOL_UP", "repeat=11")  # schema-validated like a model call
+    assert done.returncode == 1 and "repeat" in done.stderr
+    done = run("call", sim_env, "--dry-run", "power_off")
+    assert json.loads(done.stdout)["outcome"] == "dry_run"
+    assert "start_activity" in run("call", sim_env, "tools").stdout
+
+
 def test_x1_simulate_refuses_mqtt_only():
     done = subprocess.run(
         [exe(), "simulate", "--model", "X1", "--no-server", "--no-prompt"], capture_output=True, text=True, timeout=30

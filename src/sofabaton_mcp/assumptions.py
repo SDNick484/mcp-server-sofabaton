@@ -53,9 +53,11 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
     ),
     Assumption(
         "S-REST-MODES",
-        "mode 'observe' (the Sofabaton app holds the proxy) refuses commands with 409; no hub session answers "
-        "catalog reads with 503; both are RFC 9457 problem bodies carrying 'mode'.",
-        "[S] observed on 0.2.4 with no hub attached; observe mode itself not observed",
+        "mode 'observe' (the Sofabaton app holds the proxy) refuses commands with 409; with no hub session, "
+        "catalog reads and send/start/stop get 503 (they look the id up first) and find-remote 409; all are "
+        "RFC 9457 problem bodies carrying 'mode'.",
+        "[S] 503 observed on 0.2.4 with no hub attached; the per-route mapping read from its routes_hub_data.py; "
+        "observe mode itself not observed",
         "medium",
     ),
     Assumption(

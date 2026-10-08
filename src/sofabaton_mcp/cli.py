@@ -5,6 +5,9 @@ serve     speak MCP: stdio by default, or --http for a long-lived service behind
           that changes anything.
 check     first contact: pick the hub the way the server will, print its model,
           what it can do here, and the names the model will use.
+call      call one tool exactly as the model would (through an in-process MCP
+          client, so argument validation is the same) and print the result:
+          `call start_activity activity="Watch Shield"`, `call tools` to list.
 doctor    check each way to the hub, layer by layer (doctor.py).
 simulate  a fake hub with no hardware: a fake sofabaton-x-server (REST), and for
           an X2 a fake MQTT broker and the X2's MQTT side, sharing one state.
@@ -16,6 +19,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import json
 import logging
 import os
 import sys
@@ -76,6 +80,37 @@ async def _cmd_doctor(args: argparse.Namespace) -> int:
     )
     print(to_json(report) if args.json else render(report))
     return 0 if report.ok else 1
+
+
+async def _cmd_call(args: argparse.Namespace) -> int:
+    from mcp import Client
+
+    from .server import mcp
+
+    tool_args: dict[str, object] = {}
+    for pair in args.args:
+        key, sep, raw = pair.partition("=")
+        if not sep:
+            print(f"arguments are key=value, got {pair!r}", file=sys.stderr)
+            return 2
+        try:
+            tool_args[key] = json.loads(raw)  # repeat=3 -> 3, target=null -> None
+        except json.JSONDecodeError:
+            tool_args[key] = raw  # activity=Watch Shield -> a string
+    async with Client(mcp) as c:
+        if args.tool == "tools":
+            for t in (await c.list_tools()).tools:
+                print(f"{t.name:<20} {(t.description or '').splitlines()[0]}")
+            return 0
+        result = await c.call_tool(args.tool, tool_args)
+    if result.is_error:
+        print(" ".join(getattr(part, "text", "") for part in result.content) or "error", file=sys.stderr)
+        return 1
+    body = result.structured_content
+    if isinstance(body, dict) and set(body) == {"result"}:
+        body = body["result"]
+    print(json.dumps(body, indent=2))
+    return 0
 
 
 # --- simulate -------------------------------------------------------------------------------
@@ -231,6 +266,10 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--dry-run", action="store_true", help="read the hub but send nothing that changes anything")
     remote.add_http_arguments(serve, default_port=8714, default_path="/sofabaton/mcp")
     sub.add_parser("check", parents=[common], help="Pick the hub, show its model, capabilities and names")
+    call = sub.add_parser("call", parents=[common], help="Call one tool as the model would and print the result")
+    call.add_argument("tool", help="tool name, or 'tools' to list them")
+    call.add_argument("args", nargs="*", metavar="key=value", help="tool arguments (values are JSON if they parse)")
+    call.add_argument("--dry-run", action="store_true", help="send nothing that changes anything")
     doc = sub.add_parser("doctor", parents=[common], help="Check sofabaton-x-server and/or MQTT, layer by layer")
     doc.add_argument("--json", action="store_true")
     doc.add_argument("--dump", metavar="DIR", help="also write what the hub returns to DIR (redacted)")
@@ -255,11 +294,15 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.cmd in ("check", "doctor", "simulate"):
+    if args.cmd in ("check", "call", "doctor", "simulate"):
         _setup_logging(args, default=logging.WARNING)
+        if getattr(args, "dry_run", False):
+            os.environ["SOFABATON_DRY_RUN"] = "1"
         with contextlib.suppress(KeyboardInterrupt):
             if args.cmd == "check":
                 sys.exit(asyncio.run(_cmd_check()))
+            if args.cmd == "call":
+                sys.exit(asyncio.run(_cmd_call(args)))
             if args.cmd == "doctor":
                 sys.exit(asyncio.run(_cmd_doctor(args)))
             sys.exit(asyncio.run(_cmd_simulate(args)))

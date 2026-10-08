@@ -128,6 +128,10 @@ class SofabatonClient:
     poll_interval = 0.5
     repeat_gap = 0.3  # default pause between repeated presses
     identity_retry = 30.0  # seconds between attempts to learn model/MAC from the server
+    # A client may call a tool the moment it launches us (MCP Inspector's CLI mode, get_status at startup),
+    # before the broker connection is up. The first call waits this long for it, once; later calls don't
+    # wait, so a broker that goes away is reported at once.
+    mqtt_startup_grace = 3.0
 
     def __init__(self, settings: Settings, api: ServerAPI | None, mqtt_factory: ClientFactory | None = None) -> None:
         self.settings = settings
@@ -139,6 +143,7 @@ class SofabatonClient:
         self.hub_name: str | None = None
         self._hub_id: str | None = None
         self._identity_task: asyncio.Task[None] | None = None
+        self._mqtt_grace_used = False
         self.press_bucket = TokenBucket(PRESS_CAPACITY, PRESS_RATE)
         self.activity_bucket = TokenBucket(ACTIVITY_CAPACITY, ACTIVITY_RATE)
 
@@ -248,6 +253,19 @@ class SofabatonClient:
             self.model = cast(Model, version)
         return _ServerView(True, st, None)
 
+    async def _mqtt_startup(self) -> None:
+        """On the first call only: give a just-started MQTT connection a moment to come up."""
+        if self._mqtt_grace_used:
+            return
+        self._mqtt_grace_used = True
+        m = self.mqtt
+        if m is None or self.mqtt_blocked:
+            return
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.mqtt_startup_grace
+        while not (m.connected or m.auth_failed) and loop.time() < deadline:
+            await asyncio.sleep(0.05)
+
     def _mqtt_ok(self) -> bool:
         return self.mqtt is not None and self.mqtt.connected and self.mqtt_blocked is None
 
@@ -287,6 +305,7 @@ class SofabatonClient:
         )
 
     async def _read_path(self) -> Path:
+        await self._mqtt_startup()
         sv = await self._server_view()
         if sv is not None and sv.reachable and sv.status is not None and sv.status["hub_connected"]:
             return "server"
@@ -295,6 +314,7 @@ class SofabatonClient:
         raise self._no_path(sv, control=False)
 
     async def _control_path(self) -> Path:
+        await self._mqtt_startup()
         sv = await self._server_view()
         if sv is not None and sv.reachable and sv.status is not None and sv.status["mode"] == "control":
             return "server"
@@ -363,6 +383,7 @@ class SofabatonClient:
         return caps, limits
 
     async def status(self) -> Status:
+        await self._mqtt_startup()
         sv = await self._server_view()
         caps, limits = self._capabilities(sv)
         st = sv.status if sv else None

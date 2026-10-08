@@ -67,6 +67,25 @@ async def test_mqtt_only_status_and_capabilities(make, x2):
     assert any("No sofabaton-x-server" in lim for lim in st["limitations"])
 
 
+async def test_the_first_call_waits_for_the_broker(make, x2, monkeypatch):
+    """A client may call get_status the instant it launches us; don't answer 'connecting'."""
+    monkeypatch.setattr(SofabatonClient, "mqtt_startup_grace", 3.0)
+    c = await make()  # no connected() wait
+    assert (await c.status())["via"] == "mqtt"
+
+
+async def test_later_calls_dont_wait(make, broker, state, monkeypatch):
+    monkeypatch.setattr(SofabatonClient, "mqtt_startup_grace", 0.2)
+    c = await make()  # no fake X2 needed: we only look at the path choice
+    in_package(broker)
+    await broker[2].stop()  # the broker goes away before we ever connect... (in-package only)
+    await c.status()  # ...the first call waits out the grace,
+    loop = asyncio.get_running_loop()
+    t = loop.time()
+    st = await c.status()  # and the next one answers at once
+    assert loop.time() - t < 0.15 and st["via"] is None
+
+
 async def test_catalog_over_mqtt(make, x2):
     """S-MQTT-LISTS"""
     c = await connected(await make())

@@ -51,6 +51,7 @@ def fast(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(SofabatonClient, "activity_timeout", 0.5)
     monkeypatch.setattr(SofabatonClient, "poll_interval", 0.01)
     monkeypatch.setattr(SofabatonClient, "repeat_gap", 0.0)
+    monkeypatch.setattr(SofabatonClient, "mqtt_startup_grace", 0.5)
     monkeypatch.setattr(MqttHub, "publish_gap", 0.0)
     monkeypatch.setattr(MqttHub, "reply_timeout", 1.0)
     monkeypatch.setattr(MqttHub, "retry_delay", 0.05)
