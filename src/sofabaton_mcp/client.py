@@ -48,7 +48,7 @@ from .limits import (
     PRESS_RATE,
     TokenBucket,
 )
-from .mqtt import ClientFactory, MqttHub
+from .mqtt import ClientFactory, MqttHub, stop_task
 
 log = logging.getLogger(__name__)
 
@@ -164,9 +164,7 @@ class SofabatonClient:
             self._identity_task = asyncio.create_task(self._learn_identity(), name="sofabaton-identity")
 
     async def stop(self) -> None:
-        if self._identity_task is not None:
-            self._identity_task.cancel()
-            await asyncio.gather(self._identity_task, return_exceptions=True)
+        await stop_task(self._identity_task, 5.0, "Learning the hub's identity")
         if self.mqtt is not None:
             await self.mqtt.stop()
         if self.api is not None:
