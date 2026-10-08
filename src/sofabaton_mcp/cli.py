@@ -1,5 +1,8 @@
 """Entry point: `mcp-server-sofabaton` (serve) and `mcp-server-sofabaton check`.
 
+`serve` speaks stdio by default; `serve --http` runs it as a long-lived HTTP
+service behind Cloudflare Access (see remote.py and the README).
+
 `check` is first contact: it reaches sofabaton-x-server, picks the hub the same
 way the server will, and prints the names the model will use.
 """
@@ -11,7 +14,7 @@ import asyncio
 import logging
 import sys
 
-from . import __version__
+from . import __version__, remote
 from .api import ServerAPI, SofabatonError
 from .client import SofabatonClient
 from .config import load_settings
@@ -53,7 +56,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("serve", help="Run the MCP server over stdio (default)")
+    serve = sub.add_parser("serve", help="Run the MCP server (stdio by default, or --http)")
+    remote.add_http_arguments(serve, default_port=8714, default_path="/sofabaton/mcp")
     sub.add_parser("check", help="Reach sofabaton-x-server, pick the hub, and list what it has")
     args = parser.parse_args(argv)
 
@@ -64,4 +68,10 @@ def main(argv: list[str] | None = None) -> None:
     _setup_logging()
     from .server import mcp  # imported late: `check` doesn't need the server code
 
-    mcp.run()
+    if getattr(args, "http", False):
+        try:
+            remote.serve_http(mcp, remote.http_config(args))
+        except remote.ConfigError as exc:
+            parser.exit(2, f"mcp-server-sofabaton: {exc}\n")
+    else:
+        mcp.run()  # stdio: JSON-RPC over stdin/stdout
