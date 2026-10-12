@@ -260,7 +260,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("-v", "--verbose", action="count", default=0, help="debug logging")
-    common.add_argument("--no-redact", action="store_true", help="don't mask IPs, MACs and passwords in logs")
+    common.add_argument(
+        "--no-redact",
+        action="store_true",
+        help="don't mask IPs and MACs in logs; secrets stay masked (SOFABATON_LOG_UNREDACTED=1)",
+    )
     sub = parser.add_subparsers(dest="cmd")
     serve = sub.add_parser("serve", parents=[common], help="Run the MCP server (stdio by default, or --http)")
     serve.add_argument("--dry-run", action="store_true", help="read the hub but send nothing that changes anything")
