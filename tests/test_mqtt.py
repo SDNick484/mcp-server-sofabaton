@@ -16,6 +16,7 @@ import pytest
 from sofabaton_mcp.api import ServerAPI, SofabatonError
 from sofabaton_mcp.client import SofabatonClient
 from sofabaton_mcp.config import MqttSettings, Settings
+from sofabaton_mcp.mqtt import MqttHub
 from sofabaton_mcp.sim.broker import topic_matches
 from sofabaton_mcp.sim.fake_server import FakeServer
 from sofabaton_mcp.sim.hub_state import Executed, FakeHubState, load_state
@@ -301,3 +302,92 @@ async def test_requests_are_serialized_one_at_a_time(make, x2):
     topics = [t.rsplit("/", 1)[-1] for t, _ in x2.received]
     assert topics.count("list_request") == 4  # activities, devices, and the two lookups commands() needed
     assert json.dumps(x2.received[0][1]) == '{"data": "activity_list"}'
+
+
+# --- shutdown --------------------------------------------------------------------------------------
+class SwallowingClient:
+    """An MQTT client whose subscribe can drop a cancellation, as asyncio.wait_for does on Python 3.11.
+
+    aiomqtt waits for every acknowledgement with asyncio.wait_for. On 3.11, if the awaited reply and a
+    cancellation land in the same loop iteration, wait_for returns the reply and the cancel is lost
+    (CPython PR #28149; fixed in 3.12). CI hit it about one run in three: `call` with bad arguments
+    exits at once, so shutdown cancelled the MQTT task mid-subscribe, the task carried on into its
+    message loop, and stop() waited for it forever.
+    """
+
+    def __init__(self, *_: object, swallow_all: bool = False, **__: object) -> None:
+        self.swallowed = 0
+        self.swallow_all = swallow_all
+        self._queue: asyncio.Queue[object] = asyncio.Queue()
+
+    async def __aenter__(self) -> SwallowingClient:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    async def subscribe(self, topic: str, qos: int = 0) -> None:
+        try:
+            await asyncio.sleep(0.2)
+        except asyncio.CancelledError:
+            if self.swallowed and not self.swallow_all:
+                raise
+            self.swallowed += 1  # the reply "won": the cancel is dropped
+
+    @property
+    def messages(self):  # noqa: ANN201
+        return self._iterate()
+
+    async def _iterate(self):  # noqa: ANN202
+        while True:
+            try:
+                yield await self._queue.get()
+            except asyncio.CancelledError:
+                if not self.swallow_all:
+                    raise
+
+
+def _hub(client: SwallowingClient) -> MqttHub:
+    return MqttHub(MqttSettings("broker", 1883, False, None, None, None), "02AB34CD56EF", lambda *a, **k: client)
+
+
+async def test_stop_survives_a_dropped_cancellation():
+    client = SwallowingClient()
+    hub = _hub(client)
+    await hub.start()
+    await asyncio.sleep(0.05)  # mid-subscribe, where 3.11 can drop the cancel
+    # stop() in its own task: a timeout around it would work by cancelling *this* task, and the old
+    # stop() swallowed its caller's cancellation too, so that check passed while stop() hung.
+    stopping = asyncio.create_task(hub.stop())
+    done, _ = await asyncio.wait({stopping}, timeout=3)
+    assert stopping in done, "stop() hung"
+    assert client.swallowed == 1 and hub._task is not None and hub._task.done()
+
+
+async def test_stop_doesnt_swallow_its_callers_cancellation():
+    client = SwallowingClient(swallow_all=True)  # a task that won't exit, so stop() is still waiting
+    hub = _hub(client)
+    await hub.start()
+    await asyncio.sleep(0.05)
+    stopping = asyncio.create_task(hub.stop())
+    await asyncio.sleep(0.1)
+    stopping.cancel()  # e.g. the server being shut down harder
+    with pytest.raises(asyncio.CancelledError):
+        await stopping
+    client.swallow_all = False
+    await hub.stop()
+
+
+async def test_stop_is_bounded_even_if_the_task_never_exits(monkeypatch, caplog):
+    monkeypatch.setattr(MqttHub, "stop_timeout", 0.5)
+    client = SwallowingClient(swallow_all=True)
+    hub = _hub(client)
+    await hub.start()
+    await asyncio.sleep(0.05)
+    loop = asyncio.get_running_loop()
+    t = loop.time()
+    await hub.stop()
+    assert loop.time() - t < 1.5
+    assert "didn't stop within" in caplog.text
+    client.swallow_all = False  # let the test's loop close cleanly
+    await hub.stop()
