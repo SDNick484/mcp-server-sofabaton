@@ -26,7 +26,11 @@ explain the reasoning behind non-obvious changes instead of only making them.
 - `src/sofabaton_mcp/server.py`: MCP tools (`MCPServer` from `mcp` 2.x)
 - `src/sofabaton_mcp/assumptions.py`: every unverified protocol claim (id, source, confidence,
   status)
-- `src/sofabaton_mcp/limits.py`, `logsafe.py`, `remote.py` (shared with siblings, keep identical)
+- `src/sofabaton_mcp/limits.py`: rate limits and per-call caps
+- Shared with the siblings (mcp-server-onkyo, -shieldtv, -webos and the other of harmony/sofabaton):
+  `src/sofabaton_mcp/remote.py` and `logsafe.py` are byte-identical; `tests/test_remote.py` and
+  `tests/test_logsafe.py` are identical except for the package name. Change all five repos together;
+  the current revision is the one in mcp-server-webos. `limits.py` is shared with Harmony only.
 - `src/sofabaton_mcp/doctor.py`, `cli.py`: `serve`, `check`, `call`, `doctor`, `simulate`
 - `src/sofabaton_mcp/sim/`: `FakeServer` (Starlette), `Broker` (MQTT 3.1.1), `FakeX2`, shared
   `FakeHubState`, fixtures. Used by tests *and* `simulate`
@@ -56,7 +60,8 @@ explain the reasoning behind non-obvious changes instead of only making them.
   `power_off`, which confirm. Don't trust `accepted: true`.
 - Over MQTT, presses wait out the settle window after an activity change (`S-MQTT-SETTLE`).
 - Raise `SofabatonError` (a `ToolError`) for anything the model or user can act on.
-- Log to **stderr only**, through `logsafe` (IPs, MACs, URL passwords redacted).
+- Log to **stderr only**, through `logsafe` (IPs and MACs redacted; URL passwords and other secrets
+  always).
 - Every tool has a `title`, explicit `ToolAnnotations`, and constrained args. `test_tools.py`
   enforces this. Nothing is destructive.
 

@@ -89,7 +89,7 @@ client's config):
 | `SOFABATON_MQTT_MAC`            | *(from the server)*     | The X2's MAC. Needed for MQTT only; with a server it's learned                |
 | `SOFABATON_MQTT_SETTLE_S`       | `6`                     | After an activity change over MQTT, hold presses off this long                  |
 | `SOFABATON_DRY_RUN`             | off                     | Read the hub, send nothing that changes anything (`serve --dry-run` too)        |
-| `SOFABATON_LOG_UNREDACTED`      | off                     | Don't mask IPs, MACs and passwords in logs (`--no-redact`)                      |
+| `SOFABATON_LOG_UNREDACTED`      | off                     | Don't mask IPs and MACs in logs (`--no-redact`); passwords and other secrets stay masked |
 
 There is deliberately no sofabaton-x-server token setting. Bad values are reported by name at
 startup and by `doctor`, rather than failing later.
@@ -154,7 +154,8 @@ CF_ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com CF_ACCESS_AUD=<aud tag> \
 ```
 
 Every request must carry a valid Access JWT (`Cf-Access-Jwt-Assertion`). The checks and the
-flags are documented in `src/sofabaton_mcp/remote.py`.
+flags are documented in `src/sofabaton_mcp/remote.py`. The Host-header (DNS-rebinding) checks stay on
+even with `--bind 0.0.0.0`: for LAN clients, also pass `--public-host <this machine's LAN IP>`.
 
 ## Tools
 
@@ -248,7 +249,8 @@ or the server's control panel: that's editing the hub, which this server doesn't
   one per 15 s. A call over the limit is refused whole, never half-sent.
 - **Dry run.** `serve --dry-run` (or `call --dry-run`) reads the hub and reports what it would
   send.
-- **Logs are redacted** (IP addresses, MACs, passwords in URLs) and go to stderr; stdout is the
+- **Logs are redacted**: IP addresses and MACs (unless `--no-redact`), and always secrets (passwords
+  in URLs, JWTs, bearer tokens, keys). They go to stderr; stdout is the
   MCP transport.
 - Every tool has a title and explicit MCP annotations. Nothing is destructive.
 
