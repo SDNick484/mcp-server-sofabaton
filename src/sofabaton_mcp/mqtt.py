@@ -40,37 +40,11 @@ from typing import Any
 from . import protocol as p
 from .api import Press, PressPage, SofabatonError
 from .config import MqttSettings
+from .tasks import stop_task
 
 log = logging.getLogger(__name__)
 
 ClientFactory = Callable[..., Any]
-
-
-async def stop_task(task: asyncio.Task[Any] | None, timeout: float, what: str) -> None:
-    """Cancel a background task and wait until it has finished, re-cancelling as needed, for at most `timeout`.
-
-    Why not just `task.cancel(); await task`:
-    - One cancel isn't always enough. On Python 3.11, asyncio.wait_for (which aiomqtt uses for every
-      acknowledgement) can return the awaited result and drop a cancellation that arrives in the same
-      loop iteration (CPython PR #28149; fixed in 3.12). The task carries on, and awaiting it hangs
-      shutdown forever. So: cancel, wait briefly, cancel again until it's done.
-    - Bounded: a task that still won't exit is abandoned with a warning rather than hanging the server.
-    - `asyncio.wait` never raises the task's own CancelledError into us, so a cancellation of *our*
-      caller still propagates (suppressing CancelledError around `await task` swallowed both).
-    """
-    if task is None:
-        return
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    while not task.done():
-        left = deadline - loop.time()
-        if left <= 0:
-            log.warning("%s didn't stop within %.0fs; abandoning it", what, timeout)
-            return
-        task.cancel()
-        await asyncio.wait({task}, timeout=min(0.25, left))
-    if not task.cancelled() and task.exception() is not None:
-        log.debug("%s ended with %r", what, task.exception())
 
 
 @dataclass
@@ -121,6 +95,8 @@ class MqttHub:
         self._task = asyncio.create_task(self._run_forever(), name="sofabaton-mqtt")
 
     async def stop(self) -> None:
+        # Not cancel-and-await: aiomqtt waits for every acknowledgement with asyncio.wait_for, which on
+        # Python 3.11 can drop the cancel (see stop_task and tests/test_mqtt.py's shutdown tests).
         await stop_task(self._task, self.stop_timeout, "The MQTT connection")
 
     def _make_client(self) -> Any:

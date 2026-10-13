@@ -27,10 +27,14 @@ explain the reasoning behind non-obvious changes instead of only making them.
 - `src/sofabaton_mcp/assumptions.py`: every unverified protocol claim (id, source, confidence,
   status)
 - `src/sofabaton_mcp/limits.py`: rate limits and per-call caps
-- Shared with the siblings (mcp-server-onkyo, -shieldtv, -webos and the other of harmony/sofabaton):
-  `src/sofabaton_mcp/remote.py` and `logsafe.py` are byte-identical; `tests/test_remote.py` and
-  `tests/test_logsafe.py` are identical except for the package name. Change all five repos together;
-  the current revision is the one in mcp-server-webos. `limits.py` is shared with Harmony only.
+- **Shared with the siblings; the source of truth is mcp-server-shared.** `src/sofabaton_mcp/remote.py`,
+  `logsafe.py`, `tasks.py` (`stop_task`, which `mqtt.py` and `client.py` use), `scripts/sync_shared.py`,
+  and `tests/test_remote.py`, `test_logsafe.py`, `test_tasks.py` (rendered with this package's name);
+  mcp-server-shared's `shared.toml` is the full list. Don't edit them here: change them in
+  mcp-server-shared, then run `python scripts/sync_shared.py --update` here and commit the files
+  together with `shared.lock`. `python scripts/sync_shared.py --check` (CI's `shared-drift` job) fails
+  on any difference from the locked commit; a weekly scheduled run also fails once mcp-server-shared
+  `main` has moved past it. `limits.py` is shared with Harmony only, by hand (not synced).
 - `src/sofabaton_mcp/doctor.py`, `cli.py`: `serve`, `check`, `call`, `doctor`, `simulate`
 - `src/sofabaton_mcp/sim/`: `FakeServer` (Starlette), `Broker` (MQTT 3.1.1), `FakeX2`, shared
   `FakeHubState`, fixtures. Used by tests *and* `simulate`
@@ -38,7 +42,7 @@ explain the reasoning behind non-obvious changes instead of only making them.
   real broker), `test_openapi_contract` (vs the recorded 0.2.4 OpenAPI), `test_client`,
   `test_mqtt`, `test_tools` (in-process MCP `Client`), `test_safety`, `test_tooling`,
   `test_recorded` (replays `doctor --dump` captures), `test_assumptions`, `test_stdio`,
-  `test_remote`, `test_api`, `test_config`. Async tests use anyio's plugin.
+  `test_remote`, `test_tasks`, `test_api`, `test_config`. Async tests use anyio's plugin.
 
 ## Rules for changes
 
@@ -95,4 +99,6 @@ Verified against the simulator only. HARDWARE_VALIDATION.md is the checklist. Ca
 pip install -e ".[dev]" && pytest && ruff check . && ruff format --check . && mypy
 mcp-server-sofabaton simulate            # fake hub; prints the export lines for another terminal
 mcp-server-sofabaton doctor | check | call <tool> k=v | serve [--http]
+python scripts/sync_shared.py --check [--latest]   # shared files vs mcp-server-shared
+python scripts/sync_shared.py --update             # take mcp-server-shared main
 ```
