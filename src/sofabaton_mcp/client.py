@@ -48,7 +48,8 @@ from .limits import (
     PRESS_RATE,
     TokenBucket,
 )
-from .mqtt import ClientFactory, MqttHub, stop_task
+from .mqtt import ClientFactory, MqttHub
+from .tasks import stop_task
 
 log = logging.getLogger(__name__)
 
