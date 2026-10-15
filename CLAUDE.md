@@ -38,6 +38,9 @@ explain the reasoning behind non-obvious changes instead of only making them.
 - `src/sofabaton_mcp/doctor.py`, `cli.py`: `serve`, `check`, `call`, `doctor`, `simulate`
 - `src/sofabaton_mcp/sim/`: `FakeServer` (Starlette), `Broker` (MQTT 3.1.1), `FakeX2`, shared
   `FakeHubState`, fixtures. Used by tests *and* `simulate`
+- `deploy/alpine/`: OpenRC service, install script (with the `[mqtt]` extra) and the container
+  smoke test CI runs; same layout as mcp-server-webos's and -harmony's. Every setting is in the
+  env file, so `run.sh <subcommand>` runs doctor/check/call with the service's environment
 - `tests/`: `conftest.py` (fakes, `broker`/`state`/`x2` fixtures; `MQTT_TEST_BROKER` swaps in a
   real broker), `test_openapi_contract` (vs the recorded 0.2.4 OpenAPI), `test_client`,
   `test_mqtt`, `test_tools` (in-process MCP `Client`), `test_safety`, `test_tooling`,

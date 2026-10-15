@@ -157,6 +157,29 @@ Every request must carry a valid Access JWT (`Cf-Access-Jwt-Assertion`). The che
 flags are documented in `src/sofabaton_mcp/remote.py`. The Host-header (DNS-rebinding) checks stay on
 even with `--bind 0.0.0.0`: for LAN clients, also pass `--public-host <this machine's LAN IP>`.
 
+### As an OpenRC service on Alpine (e.g. a Proxmox LXC)
+
+`deploy/alpine/` installs it the same way as mcp-server-webos and -harmony, so all three can share
+an LXC: a venv in `/opt/mcp-server-sofabaton` (with the `[mqtt]` extra), a `mcp-sofabaton` system
+user, every setting in `/etc/mcp-server-sofabaton/env`, and `supervise-daemon` restarting it if
+it exits. Keep the broker password out of the env file: put it in
+`/etc/mcp-server-sofabaton/mqtt-password` (`0640 root:mcp-sofabaton`) and set
+`SOFABATON_MQTT_PASSWORD_FILE` to that path.
+
+```sh
+git clone https://github.com/SDNick484/mcp-server-sofabaton.git && cd mcp-server-sofabaton
+sh deploy/alpine/install.sh                                # as root; re-run to upgrade
+vi /etc/mcp-server-sofabaton/env                           # SOFABATON_URL and/or SOFABATON_MQTT_*, Access
+su -s /bin/sh mcp-sofabaton -c '/opt/mcp-server-sofabaton/run.sh doctor'
+rc-update add mcp-server-sofabaton default && rc-service mcp-server-sofabaton start
+```
+
+Because every setting is an environment variable, `run.sh` takes a subcommand and runs it with
+exactly the service's environment: `run.sh doctor`, `run.sh check`, `run.sh call get_status`.
+Logs are in `/var/log/mcp-server-sofabaton/server.log`. CI runs `deploy/alpine/smoke-test.sh` in a
+stock `python:3.12-alpine` container: install, the test suite on musl, `run.sh doctor`, the
+service under OpenRC, and an MCP call over HTTP reaching a simulated X2 on both paths.
+
 ## Tools
 
 | Tool                 | What it does                                                                                    |
