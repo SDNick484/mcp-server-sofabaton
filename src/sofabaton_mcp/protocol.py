@@ -81,6 +81,13 @@ SUBSCRIBED = (
     "device_keys_list",
 )
 
+# Whether the X2 answers device/<MAC>/keys_request with a device's own command list. It doesn't:
+# the owner's X2 stayed silent for all six of its devices (2026-10-16), and [Y] switches its device
+# features off. Without that list there are no key ids to send, so a device's own commands are
+# unavailable over MQTT. Flip this if a firmware starts answering (doctor says so when one does).
+# ASSUMPTION S-MQTT-DEVICE-KEYS
+DEVICE_KEYS_OVER_MQTT = False
+
 # activity_id 255 in activity_control_up means "everything off" (the OFF key). [M][Y]
 ALL_OFF = 255
 

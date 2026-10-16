@@ -163,6 +163,8 @@ What a failure means:
   it doesn't answer list requests. Run step 7 to see whether it publishes anything at all.
 - `WARN The X2 didn't answer activity/<MAC>/macro_keys_request` (or another list): that list
   shape is unconfirmed. Note which one.
+- `WARN The X2 answered device/<MAC>/keys_request`: good news. Your X2 lists a device's own
+  commands, which the owner's doesn't (S-MQTT-DEVICE-KEYS). Report it with the dump.
 
 Record the MQTT side too, and compare the ids:
 
@@ -225,7 +227,7 @@ Then, one at a time, watching the TV:
 | (after the TV is fully on) `mcp-server-sofabaton call press_button button=VOL_UP repeat=2`  | Volume up twice                                                   | S-MQTT-KEYS       |
 | `mcp-server-sofabaton call send_command command="<a macro from step 2>"`                    | The macro runs                                                    | S-MQTT-MACRO      |
 | `mcp-server-sofabaton call send_command command="<a favorite from step 2>"`                 | The favorite opens (e.g. the app or channel)                      | S-MQTT-FAVORITE   |
-| `mcp-server-sofabaton call send_command command="$CMD" target="$DEV"`                       | The device does it                                                | S-MQTT-DEVICE     |
+| `mcp-server-sofabaton call send_command command="$CMD" target="$DEV"`                       | Refused at once: `doesn't list a device's own commands`          | S-MQTT-DEVICE-KEYS |
 | `mcp-server-sofabaton call find_remote`                                                    | Refused: `find_remote needs sofabaton-x-server`                  | (expected)        |
 | `mcp-server-sofabaton call power_off`                                                      | Everything turns off                                              | S-MQTT-CONTROL    |
 
@@ -300,6 +302,7 @@ something odd, the tool descriptions are what to fix.
 | `S-MQTT-FAVORITE`      | 8      | low               | yes, if an activity has a favorite               |
 | `S-MQTT-DEVICE`        | 8      | high              | yes                                              |
 | `S-MQTT-LISTS`         | 6      | medium            | yes                                              |
+| `S-MQTT-DEVICE-KEYS`   | 6, 8   | high              | yes (seen 2026-10-16: never answered)            |
 | `S-MQTT-IDS`           | 6      | low               | yes (record the answer; nothing depends on it)  |
 | `S-MQTT-SERIAL`        | 6      | medium            | partly: it shows serial requests work, not that parallel ones fail |
 | `S-MQTT-REPLY-TIMEOUT` | 6      | low               | yes                                              |

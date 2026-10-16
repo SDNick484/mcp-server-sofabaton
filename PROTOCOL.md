@@ -1,8 +1,10 @@
 # What this server assumes about Sofabaton hubs, and where each claim comes from
 
 Sofabaton publishes no API documentation. Everything below comes from other people's client
-code, their bench notes, or our own observation of sofabaton-x-server, and **none of it has been
-checked against a hub by this project yet**. Each claim has an assumption id
+code, their bench notes, or our own observation of sofabaton-x-server. Most of it **hasn't been
+checked against a hub by this project yet**; the first real X2 run (2026-10-16, MQTT only) confirmed
+the claims marked "(seen)" below and the `hardware-verified` ones in `assumptions.py`, and
+disproved one: the X2 doesn't answer device key-list requests. Each claim has an assumption id
 (`src/sofabaton_mcp/assumptions.py`), a confidence level and a source. The code cites the id
 where it depends on the claim, `doctor` lists the unconfirmed ones, and
 [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md) has the step that confirms each one.
@@ -28,16 +30,18 @@ where it depends on the claim, `doctor` lists the unconfirmed ones, and
 | ---------------------------------------------- | ------------------------ | --------------- | -------------------- | ---------------- |
 | List activities, devices, commands             | yes                      | yes             | yes                  | yes              |
 | Start / power off an activity, with confirmation | yes                    | yes             | yes                  | yes              |
-| Remote buttons, macros, favorites, device commands | yes                  | yes             | yes                  | yes ¹            |
+| Remote buttons, macros, favorites                | yes                  | yes             | yes                  | yes ¹            |
+| A device's own commands                          | yes                  | yes             | yes (not while the app is open) | no ³ |
 | Find the remote                                | yes                      | yes             | yes (not while the app is open) | no ²  |
 | Model, firmware, MAC                           | yes                      | yes             | yes                  | no               |
 | Wifi Device presses (`get_recent_presses`)     | yes (HTTP callback)      | yes             | yes                  | yes (`<MAC>/up`) |
 | Live activity state (pushed early in the macro) | no                      | no              | yes                  | yes              |
 | Control while the Sofabaton app is open        | no                       | no              | yes (falls back to MQTT) | yes          |
 
-¹ Over MQTT, hard buttons go through an activity (`activity/<MAC>/keys_control`); a device's own
-commands go through `device/<MAC>/keys_control`.
+¹ Over MQTT, hard buttons go through an activity (`activity/<MAC>/keys_control`).
 ² None of the topics in the sources makes the remote beep.
+³ The X2 doesn't answer `device/<MAC>/keys_request` (`S-MQTT-DEVICE-KEYS`, seen on hardware), so there
+are no key ids to send with `device/<MAC>/keys_control`. An activity's own commands still work.
 
 `S-X1-NO-MQTT` (high): only the X2 has MQTT. sofabaton-x-server reaches all three models over the
 proxy protocol, which is why the X1 and X1S are fully supported through it.
@@ -66,7 +70,7 @@ Assistant). `<MAC>` is the hub's MAC as 12 hex digits with no separators.
 | `activity/<MAC>/macro_keys_list`      | `{"data": [{"key_id", "key_name"}]}`          | Reply to `macro_keys_request`                                                 | `S-MQTT-LISTS`   | medium     |
 | `activity/<MAC>/favorites_keys_list`  | `{"data": [{"key_id", "key_name", "device_id"}]}` | Reply to `favorites_keys_request`                                         | `S-MQTT-LISTS`   | medium     |
 | `device/<MAC>/list`                   | `{"data": [{"device_id", "device_name"}]}`    | Reply to `device/<MAC>/list_request`                                          | `S-MQTT-LISTS`   | medium     |
-| `device/<MAC>/keys_list`              | `{"data": [{"key_id", "key_name"}]}`          | Reply to `device/<MAC>/keys_request`                                          | `S-MQTT-LISTS`   | medium     |
+| `device/<MAC>/keys_list`              | (never sent: the X2 doesn't answer)           | Would be the reply to `device/<MAC>/keys_request`                             | `S-MQTT-DEVICE-KEYS` | high (seen) |
 
 Retained messages are dropped. A retained `activity_control_up` describes some past moment, not
 now (the same rule sofabaton-x applies).
@@ -83,7 +87,7 @@ now (the same rule sofabaton-x applies).
 | `activity/<MAC>/list_request`             | `{"data": "activity_list"}`                          | Ask for the activity list                  | `S-MQTT-LISTS`    | medium       |
 | `activity/<MAC>/{keys,macro_keys,favorites_keys}_request` | `{"data": {"activity_id": 101}}`    | Ask for an activity's keys, macros or favorites | `S-MQTT-LISTS` | medium    |
 | `device/<MAC>/list_request`               | `{"data": "device_list"}`                            | Ask for the device list                    | `S-MQTT-LISTS`    | medium       |
-| `device/<MAC>/keys_request`               | `{"data": {"device_id": 1}}`                         | Ask for a device's commands                | `S-MQTT-LISTS`    | medium       |
+| `device/<MAC>/keys_request`               | `{"data": {"device_id": 1}}`                         | Ask for a device's commands. **Never answered** on the owner's X2, so not sent | `S-MQTT-DEVICE-KEYS` | high (seen) |
 
 ### Behavior
 
@@ -93,6 +97,7 @@ now (the same rule sofabaton-x applies).
 | `S-MQTT-SERIAL`        | The hub handles one request at a time, so we send them one by one, 200 ms apart                                                                               | [Y] and [H] both do this ("the hub is single-threaded")                     | medium     |
 | `S-MQTT-REPLY-TIMEOUT` | A list request is answered within 5 s                                                                                                                         | none: our timeout                                                         | low        |
 | `S-MQTT-SETTLE`        | After an announced activity change, the macro finishes within `SOFABATON_MQTT_SETTLE_S` (6 s). Presses over MQTT wait until then                             | none. [M] notes mid-macro commands can interrupt it, and there's no completion signal | low |
+| `S-MQTT-DEVICE-KEYS`   | The X2 does **not** answer `device/<MAC>/keys_request`, so a device's own commands can't be listed or sent over MQTT                 | seen on hardware 2026-10-16: no reply for any of six devices; [Y] disables its device features | high (seen) |
 | `S-MQTT-IDS`           | Nothing says MQTT ids equal sofabaton-x-server's, so ids never cross transports: names are resolved per path                                                  | none: a design choice that avoids depending on it                         | low        |
 
 ## What isn't known (and how the code copes)

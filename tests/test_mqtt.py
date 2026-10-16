@@ -121,22 +121,49 @@ async def test_presses_wait_out_the_power_macro(make, x2, state):
     assert [e.what for e in state.executed] == ["start"]
 
 
-async def test_buttons_macros_favorites_and_device_commands_over_mqtt(make, x2, state):
-    """S-MQTT-KEYS, S-MQTT-MACRO, S-MQTT-FAVORITE (device id in activity_id), S-MQTT-DEVICE"""
+async def test_buttons_macros_and_favorites_over_mqtt(make, x2, state):
+    """S-MQTT-KEYS, S-MQTT-MACRO, S-MQTT-FAVORITE (device id in activity_id)"""
     c = await connected(await make(settle_s=0))
     await c.start_activity("Watch Shield")
     await c.press("VOL_UP", None, repeat=2)
     await c.send_command("Movie Mode", None)
     await c.send_command("Netflix", None)
-    await c.send_command("Input HDMI 2", "Onkyo Receiver")
-    await eventually(lambda: len(state.executed) == 6)
+    await eventually(lambda: len(state.executed) == 5)
     assert executed(state)[1:] == [
         ("mqtt", "key", WATCH_SHIELD, 182),
         ("mqtt", "key", WATCH_SHIELD, 182),
         ("mqtt", "macro", WATCH_SHIELD, 40),
         ("mqtt", "favorite", SHIELD, 9),
-        ("mqtt", "device_key", 1, 7),
     ]
+
+
+async def test_device_commands_over_mqtt_say_why_not_at_once(make, x2):
+    """S-MQTT-DEVICE-KEYS: a real X2 never answers device/<MAC>/keys_request, so don't wait 5 s to find out."""
+    c = await connected(await make(settle_s=0))
+    loop = asyncio.get_running_loop()
+    t = loop.time()
+    with pytest.raises(SofabatonError, match="doesn't list a device's own commands.*set up sofabaton-x-server"):
+        await c.send_command("Input HDMI 2", "Onkyo Receiver")
+    with pytest.raises(SofabatonError, match="doesn't list a device's own commands"):
+        await c.commands("Onkyo Receiver")
+    assert loop.time() - t < 0.5
+    assert not [t for t, _ in x2.received if t.endswith("/keys_request") and t.startswith("device/")]
+    assert any("a device's own commands" in lim for lim in (await c.status())["limitations"])
+    # An activity's commands still work by name:
+    _, opts = await c.commands("Watch Shield")
+    assert {o.label for o in opts} == {"Movie Mode", "Netflix"}
+
+
+async def test_device_commands_over_mqtt_if_a_firmware_lists_them(make, x2, state, monkeypatch):
+    """If an X2 ever answers (doctor reports it), flipping the flag brings back S-MQTT-DEVICE sends."""
+    from sofabaton_mcp import protocol
+
+    monkeypatch.setattr(protocol, "DEVICE_KEYS_OVER_MQTT", True)
+    x2.answers_device_keys = True
+    c = await connected(await make(settle_s=0))
+    await c.send_command("Input HDMI 2", "Onkyo Receiver")
+    await eventually(lambda: executed(state) == [("mqtt", "device_key", 1, 7)])
+    assert not any("a device's own commands" in lim for lim in (await c.status())["limitations"])
 
 
 async def test_hard_buttons_to_a_device_are_refused_over_mqtt(make, x2):

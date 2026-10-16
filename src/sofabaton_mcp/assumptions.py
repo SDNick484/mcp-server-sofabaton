@@ -43,6 +43,9 @@ class Assumption:
     note: str = ""
 
 
+# Hardware runs, cited by the notes below.
+_HW_2026_10_16 = "2026-10-16, the owner's X2 over MQTT (Home Assistant's Mosquitto) from the service on LXC210"
+
 ASSUMPTIONS: tuple[Assumption, ...] = (
     # --- sofabaton-x-server (any model) -----------------------------------------------------
     Assumption(
@@ -91,6 +94,9 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "Topics use the hub's MAC as UPPERCASE bare hex (02AB34CD56EF), for activity/ and device/ topics too.",
         "[M] measured for <MAC>/up and device/<MAC>/keys_control; activity/ topics inferred",
         "medium",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": activity/<MAC>/ and device/<MAC>/ list requests were answered on the uppercase "
+        "topics (doctor never needed its lowercase probe).",
     ),
     Assumption(
         "S-MQTT-CONTROL",
@@ -123,13 +129,29 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         '{"data": {"device_id", "key_id"}} to device/<MAC>/keys_control sends a device command.',
         "[M] measured ('the hub DOES honor device/<MAC>/keys_control'); [H] uses it",
         "high",
+        note="Unused while S-MQTT-DEVICE-KEYS holds: without a device's key list there are no key ids to send.",
+    ),
+    Assumption(
+        "S-MQTT-DEVICE-KEYS",
+        "The X2 does NOT answer device/<MAC>/keys_request, so a device's own commands can't be listed or sent "
+        "over MQTT (protocol.DEVICE_KEYS_OVER_MQTT = False).",
+        "[H] requests them but tolerates 'the hub's occasional non-responses'; [Y] disables its device features",
+        "high",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": no reply at all for any of the six devices, on any topic under the MAC "
+        "(mosquitto_sub on device/<MAC>/#, activity/<MAC>/# and <MAC>/#, 4 s per request). This disproved what "
+        "the code first assumed from [H] (that it answers, then part of S-MQTT-LISTS).",
     ),
     Assumption(
         "S-MQTT-LISTS",
         'List requests ({"data": "activity_list"} etc.) are answered on activity/<MAC>/list, keys_list, '
-        "macro_keys_list, favorites_keys_list, device/<MAC>/list and keys_list with the shapes in protocol.py.",
-        "[Y] and [H] agree; no live capture seen",
+        "macro_keys_list, favorites_keys_list and device/<MAC>/list with the shapes in protocol.py. (A device's "
+        "own key list is S-MQTT-DEVICE-KEYS.)",
+        "[Y] and [H] agree",
         "medium",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": the activity list (5), the device list (6), and the first activity's keys, macros "
+        "and favorites all answered and parsed (doctor --dump).",
     ),
     Assumption(
         "S-MQTT-IDS",
@@ -148,6 +170,8 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "The X2 answers a list request within 5 s.",
         "none: our timeout",
         "low",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": every list request that is answered at all was answered within doctor's 5 s.",
     ),
     Assumption(
         "S-MQTT-SETTLE",
