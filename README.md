@@ -16,7 +16,7 @@ response tells the model which model it's talking to and what that hub can and c
 > listed activities and devices, and answered on the expected topics. It also showed that the X2
 > doesn't list a device's own commands over MQTT, which the server now says up front. Starting and
 > powering off an activity and pressing buttons over MQTT, from Claude through the connector, work
-> too. Macros, favorites and the sofabaton-x-server path are still verified against the simulator only.
+> too. Macros and favorites work too. The sofabaton-x-server path is still verified against the simulator only.
 > Every protocol detail that hasn't been confirmed on hardware is a named assumption
 > ([PROTOCOL.md](PROTOCOL.md)), and [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md) is the
 > checklist for confirming them.
@@ -352,7 +352,7 @@ hub; the rest are verified against the simulator only (details and sources in [P
 | `S-MQTT-MAC-CASE`      | medium     | hardware-verified |
 | `S-MQTT-CONTROL`       | medium     | hardware-verified |
 | `S-MQTT-KEYS`          | medium     | hardware-verified |
-| `S-MQTT-MACRO`         | medium     | simulator-only |
+| `S-MQTT-MACRO`         | medium     | hardware-verified |
 | `S-MQTT-FAVORITE`      | low        | hardware-verified |
 | `S-MQTT-DEVICE`        | high       | simulator-only |
 | `S-MQTT-LISTS`         | medium     | hardware-verified |

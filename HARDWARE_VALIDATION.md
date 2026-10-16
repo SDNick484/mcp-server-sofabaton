@@ -298,7 +298,7 @@ something odd, the tool descriptions are what to fix.
 | `S-MQTT-MAC-CASE`      | 6      | medium            | yes                                              |
 | `S-MQTT-CONTROL`       | 8      | medium            | yes (seen 2026-10-16: start and power off)       |
 | `S-MQTT-KEYS`          | 8      | medium            | yes (seen 2026-10-16: VOL_UP = 182)            |
-| `S-MQTT-MACRO`         | 8      | medium            | yes, if an activity has a macro                  |
+| `S-MQTT-MACRO`         | 8      | medium            | yes (seen 2026-10-16: Big Volume Up)             |
 | `S-MQTT-FAVORITE`      | 8      | low               | yes (seen 2026-10-16: Netflix and Disney)        |
 | `S-MQTT-DEVICE`        | 8      | high              | yes                                              |
 | `S-MQTT-LISTS`         | 6      | medium            | yes                                              |

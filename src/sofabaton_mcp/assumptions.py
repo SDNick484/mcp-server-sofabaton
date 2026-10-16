@@ -127,6 +127,9 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         '{"data": {"activity_id", "key_id"}} to activity/<MAC>/macro_keys_control runs a macro.',
         "[Y]",
         "medium",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ': send_command "Big Volume Up" on Watch TV published macro_keys_control with key_id 8, '
+        "and the receiver's volume went up by the macro's full amount.",
     ),
     Assumption(
         "S-MQTT-FAVORITE",
