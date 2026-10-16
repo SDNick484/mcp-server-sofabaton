@@ -95,9 +95,19 @@ We publish `activity_control_down`, `keys_control`, `macro_keys_control`,
 
 First real X2 run 2026-10-16 (MQTT only): login, lists and uppercase-MAC topics confirmed; the X2
 never answers `device/<MAC>/keys_request`, so `protocol.DEVICE_KEYS_OVER_MQTT` is False and device
-targets over MQTT are refused up front (`S-MQTT-DEVICE-KEYS`). Everything else is simulator-only.
+targets over MQTT are refused up front (`S-MQTT-DEVICE-KEYS`). The same day, control over MQTT from
+Claude (start, power off, buttons, a macro, favorites, the settle window, `<MAC>/up`) was confirmed; a
+burst of unanswered requests wedged the X2 until a power cycle (`S-MQTT-SERIAL` note). The
+sofabaton-x-server path and the X1/X1S are simulator-only.
 HARDWARE_VALIDATION.md is the checklist. Captures from
 `doctor --dump` go in `tests/fixtures/recorded/`.
+
+## Releases
+
+Version lives only in `src/sofabaton_mcp/__init__.py` (`pyproject.toml` reads it). Bump it and add a
+CHANGELOG.md section for every release: pip treats a same-version install as already satisfied. Pushing
+tag `vX.Y.Z` runs `.github/workflows/release.yml` (PyPI trusted publishing, then a GitHub release).
+CONTRIBUTING.md has the steps and the one-time PyPI setup.
 
 ## Commands
 
