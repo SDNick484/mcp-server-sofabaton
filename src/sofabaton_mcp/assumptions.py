@@ -88,6 +88,10 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "early in the power macro; activity_id 255 means everything off. This includes changes we request.",
         "[M] measured (incl. 'every transition'); [Y] parses the same shape",
         "high",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ': start_activity "Watch TV" got {"activity_id":101,"state":"on"}; power_off (which '
+        'asked for 101 off) got {"activity_id":255,"state":"off"}, not 101 off. The X2 also pushed one when Watch TV '
+        "was started from the physical remote. When in the macro it arrives wasn't timed.",
     ),
     Assumption(
         "S-MQTT-MAC-CASE",
@@ -104,6 +108,9 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "starts or stops an activity.",
         "[Y]",
         "medium",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": through the MCP connector, start_activity and power_off on Watch TV (101) each "
+        "published this and the family room's devices turned on, then off.",
     ),
     Assumption(
         "S-MQTT-KEYS",
@@ -140,7 +147,8 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         status="hardware-verified",
         note=_HW_2026_10_16 + ": no reply at all for any of the six devices, on any topic under the MAC "
         "(mosquitto_sub on device/<MAC>/#, activity/<MAC>/# and <MAC>/#, 4 s per request). This disproved what "
-        "the code first assumed from [H] (that it answers, then part of S-MQTT-LISTS).",
+        "the code first assumed from [H] (that it answers, then part of S-MQTT-LISTS). A burst of these wedged the "
+        "X2's request handling until a power cycle (see S-MQTT-SERIAL), so nothing but doctor's one probe sends it.",
     ),
     Assumption(
         "S-MQTT-LISTS",
@@ -164,6 +172,10 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "The hub handles one MQTT request at a time; requests are sent one by one, 200 ms apart.",
         "[Y] and [H] both serialize with a small gap ('the hub is single-threaded')",
         "medium",
+        note=_HW_2026_10_16 + ": after a burst of a dozen-plus unanswered device/<MAC>/keys_request (a probe script "
+        "and an older doctor), the X2 stopped answering every request while still pushing activity_control_up; a "
+        "power cycle fixed it. A single unanswered request (doctor's probe) left it answering. Consistent with a "
+        "one-at-a-time handler, not proof of it.",
     ),
     Assumption(
         "S-MQTT-REPLY-TIMEOUT",

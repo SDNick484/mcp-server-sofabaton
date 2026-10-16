@@ -52,7 +52,7 @@ async def test_doctor_all_good_over_rest(fake):
     text = render(report)
     assert "OK   identity  X2 'Living Room X2', firmware 300, MAC xxxxxxxx56EF" in text
     assert "All checks passed." in text
-    assert "S-MQTT-CONTROL" in text  # the unverified assumptions are listed every time
+    assert "S-MQTT-SETTLE" in text  # the unverified assumptions are listed every time
 
 
 async def test_doctor_explains_observe_mode(fake):

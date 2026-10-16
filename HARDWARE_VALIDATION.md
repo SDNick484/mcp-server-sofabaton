@@ -294,9 +294,9 @@ something odd, the tool descriptions are what to fix.
 | `S-REST-START`         | 4      | low               | yes                                              |
 | `S-X1-NO-MQTT`         | none   | high              | no: needs an X1 or X1S. Stays simulator-only     |
 | `S-MQTT-UP`            | 7      | high              | yes, with a Wifi Device bound to a key           |
-| `S-MQTT-STATE`         | 7      | high              | yes                                              |
+| `S-MQTT-STATE`         | 7      | high              | yes (seen 2026-10-16: on, and 255 for off)       |
 | `S-MQTT-MAC-CASE`      | 6      | medium            | yes                                              |
-| `S-MQTT-CONTROL`       | 8      | medium            | yes                                              |
+| `S-MQTT-CONTROL`       | 8      | medium            | yes (seen 2026-10-16: start and power off)       |
 | `S-MQTT-KEYS`          | 8      | medium            | yes                                              |
 | `S-MQTT-MACRO`         | 8      | medium            | yes, if an activity has a macro                  |
 | `S-MQTT-FAVORITE`      | 8      | low               | yes, if an activity has a favorite               |
