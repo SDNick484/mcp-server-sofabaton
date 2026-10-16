@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in mcp-server-sofabaton itself is wrong (a crash, a wrong reply, bad docs).
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the question is whether a feature works on your hub, use the **Hardware report** template instead.
+
+        `doctor` and the server's log mask IP addresses and MACs by default and never print passwords. Keep
+        it that way when pasting here (don't use `--no-redact`).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: The tool you called (or the command you ran), its arguments, and the reply or error.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`mcp-server-sofabaton --version`, or the commit if installed from git"
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Hub model
+      options: ["X2", "X1S", "X1", "Not sure", "None (simulator)"]
+    validations:
+      required: true
+  - type: dropdown
+    id: path
+    attributes:
+      label: How the server reaches the hub
+      options:
+        - "MQTT only (X2, no sofabaton-x-server)"
+        - "sofabaton-x-server only"
+        - "Both (X2 with sofabaton-x-server and MQTT)"
+        - "Simulator (mcp-server-sofabaton simulate)"
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`mcp-server-sofabaton doctor` output"
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Server log around the problem
+      description: For the Alpine service, /var/log/mcp-server-sofabaton/server.log. `serve -v` logs more.
+      render: text

@@ -1,0 +1,85 @@
+name: Hardware report
+description: What worked (and didn't) on your Sofabaton hub. Reports that everything worked are just as useful.
+title: "Hardware report: <model>, <path>"
+labels: ["hardware-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing. Most of this server's protocol details were confirmed on one X2 over MQTT;
+        everything else has only run against a simulator. Each report moves an assumption in
+        `PROTOCOL.md` from "simulator-only" to confirmed or disproved.
+
+        **Before pasting anything:** `doctor` masks IP addresses and MACs by default (don't use
+        `--no-redact` here), and never prints passwords. Check that nothing you paste contains your
+        broker password or a full MAC.
+  - type: dropdown
+    id: model
+    attributes:
+      label: Hub model
+      options: ["X2", "X1S", "X1", "Not sure"]
+    validations:
+      required: true
+  - type: dropdown
+    id: path
+    attributes:
+      label: How the server reaches the hub
+      options:
+        - "MQTT only (X2, no sofabaton-x-server)"
+        - "sofabaton-x-server only"
+        - "Both (X2 with sofabaton-x-server and MQTT)"
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Hub firmware
+      description: From the Sofabaton app, or `doctor` when sofabaton-x-server is in use. "Unknown" is fine.
+  - type: input
+    id: setup
+    attributes:
+      label: Broker and server versions
+      description: e.g. "Home Assistant Mosquitto add-on 6.4", "sofabaton-x-server 0.2.4". Leave out what you don't use.
+  - type: input
+    id: platform
+    attributes:
+      label: Where mcp-server-sofabaton runs
+      description: OS, Python version, and how it's run (stdio from Claude Desktop/Code, the Alpine service, Docker, ...)
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`mcp-server-sofabaton doctor` output"
+      description: Run it with the same settings the server uses (for the Alpine service, `run.sh doctor` as the service user).
+      render: text
+    validations:
+      required: true
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What worked
+      description: Tick what you tried and saw work on the real devices. Leave the rest unticked and say what happened below.
+      options:
+        - label: list_activities / list_devices / list_commands show the right names
+        - label: start_activity turns the devices on, and returns "done"
+        - label: power_off turns them off, and returns "done"
+        - label: press_button (e.g. VOL_UP) reaches the right device
+        - label: send_command with a macro runs it
+        - label: send_command with a favorite opens it
+        - label: send_command with a device command (needs sofabaton-x-server)
+        - label: find_remote makes the remote beep (needs sofabaton-x-server)
+        - label: get_recent_presses shows presses of a button bound to a Wifi Device
+        - label: Control still works while the Sofabaton app is open (X2 with MQTT)
+  - type: textarea
+    id: details
+    attributes:
+      label: What didn't work, or surprised you
+      description: |
+        What you asked for, what happened, and the tool's reply. If you followed HARDWARE_VALIDATION.md,
+        say which steps passed. A `doctor --dump DIR` capture (redacted) is welcome as an attachment.
+  - type: textarea
+    id: timing
+    attributes:
+      label: How long your power-on macro takes (optional)
+      description: Seconds from start_activity until everything is fully on. The server holds presses for 6 s after an activity change over MQTT (SOFABATON_MQTT_SETTLE_S).

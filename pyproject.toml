@@ -1,20 +1,26 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]  # 77: SPDX `license` strings (PEP 639)
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcp-server-sofabaton"
-version = "0.1.0"
-description = "MCP server for Sofabaton X1/X1S/X2 hubs, via sofabaton-x-server's control API (never its write API)"
+dynamic = ["version"]  # from sofabaton_mcp.__version__ (below)
+description = "MCP server for Sofabaton universal remote hubs: an X2 over its own MQTT link, or any model via sofabaton-x-server"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Nicholas E. Andrade" }]
 requires-python = ">=3.11"
 keywords = ["mcp", "mcp-server", "sofabaton", "universal-remote", "home-automation", "mqtt"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
-    "License :: OSI Approved :: MIT License",
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Home Automation",
 ]
 # Runtime needs only HTTP. The sofabaton-x library is a test dependency, to
@@ -30,6 +36,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/SDNick484/mcp-server-sofabaton"
 Issues = "https://github.com/SDNick484/mcp-server-sofabaton/issues"
+Changelog = "https://github.com/SDNick484/mcp-server-sofabaton/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # X2 MQTT support. aiomqtt is the asyncio wrapper around paho-mqtt (Eclipse),
@@ -39,6 +46,9 @@ dev = ["aiomqtt>=2.3,<3", "pytest>=8", "anyio>=4", "ruff>=0.6", "mypy>=1.11", "s
 
 [project.scripts]
 mcp-server-sofabaton = "sofabaton_mcp.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "sofabaton_mcp.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

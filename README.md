@@ -12,16 +12,40 @@ An **X2** can also be reached over **MQTT**, either on its own or alongside the 
 live activity state, and keeps the hub controllable while the Sofabaton app is open. Every
 response tells the model which model it's talking to and what that hub can and can't do.
 
-> **Status: first contact with a real X2 over MQTT done (2026-10-16).** It logged in to the broker,
-> listed activities and devices, and answered on the expected topics. It also showed that the X2
-> doesn't list a device's own commands over MQTT, which the server now says up front. Starting and
-> powering off an activity and pressing buttons over MQTT, from Claude through the connector, work
-> too. Macros and favorites work too. The sofabaton-x-server path is still verified against the simulator only.
-> Every protocol detail that hasn't been confirmed on hardware is a named assumption
-> ([PROTOCOL.md](PROTOCOL.md)), and [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md) is the
-> checklist for confirming them.
+> **Status: alpha, looking for testers.** Tested on one X2 over MQTT (see [Tested on](#tested-on)).
+> The sofabaton-x-server path, and so every X1 and X1S, has run only against the simulator. If you
+> have a Sofabaton hub, a report of what does and doesn't work on yours is the most useful thing
+> you can send: [open a hardware report](https://github.com/SDNick484/mcp-server-sofabaton/issues/new?template=hardware_report.yml).
 
 Not affiliated with Sofabaton.
+
+## Tested on
+
+| | |
+| --- | --- |
+| Hub | One Sofabaton **X2**, over **MQTT only** (no sofabaton-x-server). Firmware unknown: MQTT doesn't report it |
+| Broker | Home Assistant's Mosquitto add-on |
+| Server | Alpine Linux in a Proxmox LXC, Python 3.14, as the OpenRC service in `deploy/alpine/` |
+| Client | Claude, over Streamable HTTP through a Cloudflare Tunnel with Cloudflare Access |
+| Setup | 5 activities, 6 devices, 1 macro, 7 favorites (on the TV and on a Home Assistant Wifi Device) |
+
+**Seen working on that X2 (2026-10-16):** listing activities, devices, buttons, macros and
+favorites; starting an activity and powering it off, with the hub's confirmation; hard buttons
+(`VOL_UP`); a macro; favorites on two different devices; holding presses until the power macro
+has settled (about 5 s here, inside the 6 s window); and presses of a button bound to a Wifi
+Device arriving on `<MAC>/up`.
+
+**Seen not working, and handled:** the X2 never answers a request for a device's own command list
+over MQTT, so device commands over MQTT are refused up front with what would enable them
+(sofabaton-x-server). And a burst of a dozen or so unanswered requests left that X2 still
+publishing state but answering nothing until it was power-cycled; nothing in the server sends
+requests like that.
+
+**Not tested on hardware yet:** the X1 and X1S, sofabaton-x-server with any hub, an X2 on both
+paths at once, more than one hub, brokers other than Mosquitto, and other firmware. Each detail
+the code relies on is a named assumption with its source and status in
+[PROTOCOL.md](https://github.com/SDNick484/mcp-server-sofabaton/blob/main/PROTOCOL.md); [HARDWARE_VALIDATION.md](https://github.com/SDNick484/mcp-server-sofabaton/blob/main/HARDWARE_VALIDATION.md) is the
+checklist for confirming them on your hub.
 
 ## What works with which hub
 
@@ -65,10 +89,16 @@ Names are resolved on whichever path is used, so ids never cross from one to the
 ## Install
 
 ```sh
-git clone https://github.com/SDNick484/mcp-server-sofabaton.git
-cd mcp-server-sofabaton
+python -m venv ~/.venvs/sofabaton && . ~/.venvs/sofabaton/bin/activate
+pip install "mcp-server-sofabaton[mqtt]"     # or without [mqtt] for server-only (X1/X1S, or an X2 without MQTT)
+```
+
+From source instead (for the newest code, or to run the tests):
+
+```sh
+git clone https://github.com/SDNick484/mcp-server-sofabaton.git && cd mcp-server-sofabaton
 python -m venv .venv && . .venv/bin/activate
-pip install -e ".[mqtt]"     # or `pip install -e .` for server-only (X1/X1S, or an X2 without MQTT)
+pip install -e ".[mqtt,dev]" && pytest
 ```
 
 Requires Python 3.11+. The `[mqtt]` extra adds one dependency, `aiomqtt` (which brings
@@ -150,6 +180,15 @@ Local (stdio): Claude Code and Claude Desktop launch it themselves.
 
 For Claude Code: `claude mcp add sofabaton -e SOFABATON_URL=http://192.168.1.70:8480 -- /path/to/.venv/bin/mcp-server-sofabaton`.
 
+> [!WARNING]
+> **This server turns your devices on and off. Don't put it on a network you don't trust without
+> authentication in front of it.** Over HTTP it refuses to listen on anything but `127.0.0.1`
+> unless Cloudflare Access is configured (or you pass `--insecure-no-auth`, meant for a trusted-LAN
+> test). But a loopback bind with no `CF_ACCESS_*` settings accepts every request it gets, so a
+> tunnel or reverse proxy pointed at it without Access in front, plus `--public-host` naming that
+> public hostname, puts your remote on the internet. With a tunnel, set `CF_ACCESS_TEAM_DOMAIN`
+> and `CF_ACCESS_AUD` so the server checks Access's signed assertion on every request itself.
+
 As a service (Streamable HTTP), to share one instance between Claude Code, Claude Desktop and
 the mobile app through a Cloudflare Tunnel with Cloudflare Access in front:
 
@@ -174,7 +213,7 @@ it exits. Keep the broker password out of the env file: put it in
 ```sh
 git clone https://github.com/SDNick484/mcp-server-sofabaton.git && cd mcp-server-sofabaton
 sh deploy/alpine/install.sh                                # as root; re-run to upgrade
-vi /etc/mcp-server-sofabaton/env                           # SOFABATON_URL and/or SOFABATON_MQTT_*, Access
+vim /etc/mcp-server-sofabaton/env                          # SOFABATON_URL and/or SOFABATON_MQTT_*, Access
 su -s /bin/sh mcp-sofabaton -c '/opt/mcp-server-sofabaton/run.sh doctor'
 rc-update add mcp-server-sofabaton default && rc-service mcp-server-sofabaton start
 ```
@@ -339,7 +378,7 @@ What the tests cover:
 ## Verification status
 
 These are the protocol assumptions the code depends on. `hardware-verified` means seen on a real
-hub; the rest are verified against the simulator only (details and sources in [PROTOCOL.md](PROTOCOL.md)):
+hub; the rest are verified against the simulator only (details and sources in [PROTOCOL.md](https://github.com/SDNick484/mcp-server-sofabaton/blob/main/PROTOCOL.md)):
 
 | Assumption             | Confidence | Status         |
 | ---------------------- | ---------- | -------------- |
@@ -366,10 +405,10 @@ hub; the rest are verified against the simulator only (details and sources in [P
 
 ## Roadmap
 
-- Validate on hardware ([HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md))
+- Validate on hardware ([HARDWARE_VALIDATION.md](https://github.com/SDNick484/mcp-server-sofabaton/blob/main/HARDWARE_VALIDATION.md))
 - Push instead of poll: surface activity changes and presses as MCP resource updates
 - Publish to PyPI and the MCP registry
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/SDNick484/mcp-server-sofabaton/blob/main/LICENSE).
