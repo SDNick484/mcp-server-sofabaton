@@ -63,8 +63,8 @@ Assistant). `<MAC>` is the hub's MAC as 12 hex digits with no separators.
 
 | Topic                                 | Payload                                       | Meaning                                                                       | Id               | Confidence |
 | ------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------- | ---------------- | ---------- |
-| `<MAC>/up`                            | `{"device_id": 3, "key_id": 1}`               | A key bound to an MQTT Wifi Device was pressed. QoS 0, never retained        | `S-MQTT-UP`      | high [M]   |
-| `activity/<MAC>/activity_control_up`  | `{"activity_id": 101, "state": "on"}`         | Every activity change, including ours, *early* in the power macro. `255` means all off | `S-MQTT-STATE` | high [M][Y] |
+| `<MAC>/up`                            | `{"device_id": 3, "key_id": 1}`               | A key bound to an MQTT Wifi Device was pressed. QoS 0, never retained        | `S-MQTT-UP`      | high [M] (seen) |
+| `activity/<MAC>/activity_control_up`  | `{"activity_id": 101, "state": "on"}`         | Every activity change, including ours, *early* in the power macro. `255` means all off (seen: also after we stop one) | `S-MQTT-STATE` | high [M][Y] (seen) |
 | `activity/<MAC>/list`                 | `{"data": [{"activity_id", "activity_name", "state"}]}` | Reply to `list_request`                                            | `S-MQTT-LISTS`   | medium [Y][H] |
 | `activity/<MAC>/keys_list`            | `{"data": [{"key_id", "key_name"}]}`          | Reply to `keys_request`                                                       | `S-MQTT-LISTS`   | medium     |
 | `activity/<MAC>/macro_keys_list`      | `{"data": [{"key_id", "key_name"}]}`          | Reply to `macro_keys_request`                                                 | `S-MQTT-LISTS`   | medium     |
@@ -79,10 +79,10 @@ now (the same rule sofabaton-x applies).
 
 | Topic                                     | Payload                                              | Does                                       | Id                | Confidence   |
 | ----------------------------------------- | ---------------------------------------------------- | ------------------------------------------ | ----------------- | ------------ |
-| `activity/<MAC>/activity_control_down`    | `{"data": {"activity_id": 101, "state": "on"}}`      | Start (`on`) or stop (`off`) an activity   | `S-MQTT-CONTROL`  | medium [Y]   |
-| `activity/<MAC>/keys_control`             | `{"data": {"activity_id": 101, "key_id": 182}}`      | A hard button through an activity (`key_id` = the ButtonName code; VOL_UP = 182) | `S-MQTT-KEYS` | medium [Y] |
-| `activity/<MAC>/macro_keys_control`       | `{"data": {"activity_id": 101, "key_id": 40}}`       | Run a macro                                | `S-MQTT-MACRO`    | medium [Y]   |
-| `activity/<MAC>/favorites_keys_control`   | `{"data": {"activity_id": <device id>, "key_id": 9}}` | A favorite. The *device* id goes in `activity_id` ("Due to firmware design issue") | `S-MQTT-FAVORITE` | low [Y] only |
+| `activity/<MAC>/activity_control_down`    | `{"data": {"activity_id": 101, "state": "on"}}`      | Start (`on`) or stop (`off`) an activity   | `S-MQTT-CONTROL`  | medium [Y] (seen) |
+| `activity/<MAC>/keys_control`             | `{"data": {"activity_id": 101, "key_id": 182}}`      | A hard button through an activity (`key_id` = the ButtonName code; VOL_UP = 182) | `S-MQTT-KEYS` | medium [Y] (seen) |
+| `activity/<MAC>/macro_keys_control`       | `{"data": {"activity_id": 101, "key_id": 40}}`       | Run a macro                                | `S-MQTT-MACRO`    | medium [Y] (seen) |
+| `activity/<MAC>/favorites_keys_control`   | `{"data": {"activity_id": <device id>, "key_id": 9}}` | A favorite. The *device* id goes in `activity_id` ("Due to firmware design issue") | `S-MQTT-FAVORITE` | low [Y] only (seen) |
 | `device/<MAC>/keys_control`               | `{"data": {"device_id": 1, "key_id": 7}}`            | A device's own command                     | `S-MQTT-DEVICE`   | high [M][H]  |
 | `activity/<MAC>/list_request`             | `{"data": "activity_list"}`                          | Ask for the activity list                  | `S-MQTT-LISTS`    | medium       |
 | `activity/<MAC>/{keys,macro_keys,favorites_keys}_request` | `{"data": {"activity_id": 101}}`    | Ask for an activity's keys, macros or favorites | `S-MQTT-LISTS` | medium    |
@@ -94,9 +94,9 @@ now (the same rule sofabaton-x applies).
 | Id                     | Claim                                                                                                                                                         | Source                                                                    | Confidence |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------- |
 | `S-MQTT-MAC-CASE`      | The MAC is UPPERCASE in every topic                                                                                                                            | [M] measured for `<MAC>/up` and `device/<MAC>/keys_control`; `activity/` inferred | medium |
-| `S-MQTT-SERIAL`        | The hub handles one request at a time, so we send them one by one, 200 ms apart                                                                               | [Y] and [H] both do this ("the hub is single-threaded")                     | medium     |
+| `S-MQTT-SERIAL`        | The hub handles one request at a time, so we send them one by one, 200 ms apart                                                                               | [Y] and [H] both do this ("the hub is single-threaded"). Seen: a burst of unanswered requests wedged its request handling until a power cycle | medium     |
 | `S-MQTT-REPLY-TIMEOUT` | A list request is answered within 5 s                                                                                                                         | none: our timeout                                                         | low        |
-| `S-MQTT-SETTLE`        | After an announced activity change, the macro finishes within `SOFABATON_MQTT_SETTLE_S` (6 s). Presses over MQTT wait until then                             | none. [M] notes mid-macro commands can interrupt it, and there's no completion signal | low |
+| `S-MQTT-SETTLE`        | After an announced activity change, the macro finishes within `SOFABATON_MQTT_SETTLE_S` (6 s). Presses over MQTT wait until then                             | none. [M] notes mid-macro commands can interrupt it, and there's no completion signal. Seen: ~5 s for Watch TV | low |
 | `S-MQTT-DEVICE-KEYS`   | The X2 does **not** answer `device/<MAC>/keys_request`, so a device's own commands can't be listed or sent over MQTT                 | seen on hardware 2026-10-16: no reply for any of six devices; [Y] disables its device features | high (seen) |
 | `S-MQTT-IDS`           | Nothing says MQTT ids equal sofabaton-x-server's, so ids never cross transports: names are resolved per path                                                  | none: a design choice that avoids depending on it                         | low        |
 

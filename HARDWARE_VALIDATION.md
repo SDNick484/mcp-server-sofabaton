@@ -293,20 +293,20 @@ something odd, the tool descriptions are what to fix.
 | `S-REST-MODES`         | 5      | medium            | yes (the 409; the 503 needs the hub unplugged)   |
 | `S-REST-START`         | 4      | low               | yes                                              |
 | `S-X1-NO-MQTT`         | none   | high              | no: needs an X1 or X1S. Stays simulator-only     |
-| `S-MQTT-UP`            | 7      | high              | yes, with a Wifi Device bound to a key           |
-| `S-MQTT-STATE`         | 7      | high              | yes                                              |
+| `S-MQTT-UP`            | 7      | high              | yes (seen 2026-10-16: a remote button press)     |
+| `S-MQTT-STATE`         | 7      | high              | yes (seen 2026-10-16: on, and 255 for off)       |
 | `S-MQTT-MAC-CASE`      | 6      | medium            | yes                                              |
-| `S-MQTT-CONTROL`       | 8      | medium            | yes                                              |
-| `S-MQTT-KEYS`          | 8      | medium            | yes                                              |
-| `S-MQTT-MACRO`         | 8      | medium            | yes, if an activity has a macro                  |
-| `S-MQTT-FAVORITE`      | 8      | low               | yes, if an activity has a favorite               |
+| `S-MQTT-CONTROL`       | 8      | medium            | yes (seen 2026-10-16: start and power off)       |
+| `S-MQTT-KEYS`          | 8      | medium            | yes (seen 2026-10-16: VOL_UP = 182)            |
+| `S-MQTT-MACRO`         | 8      | medium            | yes (seen 2026-10-16: Big Volume Up)             |
+| `S-MQTT-FAVORITE`      | 8      | low               | yes (seen 2026-10-16: Netflix and Disney)        |
 | `S-MQTT-DEVICE`        | 8      | high              | yes                                              |
 | `S-MQTT-LISTS`         | 6      | medium            | yes                                              |
 | `S-MQTT-DEVICE-KEYS`   | 6, 8   | high              | yes (seen 2026-10-16: never answered)            |
 | `S-MQTT-IDS`           | 6      | low               | yes (record the answer; nothing depends on it)  |
 | `S-MQTT-SERIAL`        | 6      | medium            | partly: it shows serial requests work, not that parallel ones fail |
 | `S-MQTT-REPLY-TIMEOUT` | 6      | low               | yes                                              |
-| `S-MQTT-SETTLE`        | 7, 8   | low               | yes (and tune `SOFABATON_MQTT_SETTLE_S`)         |
+| `S-MQTT-SETTLE`        | 7, 8   | low               | yes (seen 2026-10-16: ~5 s for Watch TV)         |
 
 ## What to send back if something fails
 

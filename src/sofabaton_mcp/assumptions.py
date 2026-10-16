@@ -81,6 +81,9 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         'A key bound to an MQTT Wifi Device publishes {"device_id", "key_id"} to <MAC>/up, QoS 0, never retained.',
         "[M] measured; openHAB forum user report agrees",
         "high",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": a button bound to an MQTT Wifi Device was pressed on the physical remote, and the "
+        "owner saw the <MAC>/up message on the broker with mosquitto_sub.",
     ),
     Assumption(
         "S-MQTT-STATE",
@@ -88,6 +91,10 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "early in the power macro; activity_id 255 means everything off. This includes changes we request.",
         "[M] measured (incl. 'every transition'); [Y] parses the same shape",
         "high",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ': start_activity "Watch TV" got {"activity_id":101,"state":"on"}; power_off (which '
+        'asked for 101 off) got {"activity_id":255,"state":"off"}, not 101 off. The X2 also pushed one when Watch TV '
+        "was started from the physical remote. When in the macro it arrives wasn't timed.",
     ),
     Assumption(
         "S-MQTT-MAC-CASE",
@@ -104,6 +111,9 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "starts or stops an activity.",
         "[Y]",
         "medium",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": through the MCP connector, start_activity and power_off on Watch TV (101) each "
+        "published this and the family room's devices turned on, then off.",
     ),
     Assumption(
         "S-MQTT-KEYS",
@@ -111,18 +121,27 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "the ButtonName code (VOL_UP = 182).",
         "[Y] (its key table matches sofabaton-x's ButtonName codes)",
         "medium",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": press_button VOL_UP repeat=2 on Watch TV published key_id 182 twice and the "
+        "receiver's volume went up, twice in a row.",
     ),
     Assumption(
         "S-MQTT-MACRO",
         '{"data": {"activity_id", "key_id"}} to activity/<MAC>/macro_keys_control runs a macro.',
         "[Y]",
         "medium",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ': send_command "Big Volume Up" on Watch TV published macro_keys_control with key_id 8, '
+        "and the receiver's volume went up by the macro's full amount.",
     ),
     Assumption(
         "S-MQTT-FAVORITE",
         "Favorites go to activity/<MAC>/favorites_keys_control with the *device* id in the activity_id field.",
         "[Y] only ('Due to firmware design issue')",
         "low",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": Watch TV's favorites Netflix (device 1, on the TV) and Disney (device 6, on Home "
+        "Assistant) both opened from Claude, with the device id in activity_id; each sent twice, both worked.",
     ),
     Assumption(
         "S-MQTT-DEVICE",
@@ -140,7 +159,8 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         status="hardware-verified",
         note=_HW_2026_10_16 + ": no reply at all for any of the six devices, on any topic under the MAC "
         "(mosquitto_sub on device/<MAC>/#, activity/<MAC>/# and <MAC>/#, 4 s per request). This disproved what "
-        "the code first assumed from [H] (that it answers, then part of S-MQTT-LISTS).",
+        "the code first assumed from [H] (that it answers, then part of S-MQTT-LISTS). A burst of these wedged the "
+        "X2's request handling until a power cycle (see S-MQTT-SERIAL), so nothing but doctor's one probe sends it.",
     ),
     Assumption(
         "S-MQTT-LISTS",
@@ -164,6 +184,10 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "The hub handles one MQTT request at a time; requests are sent one by one, 200 ms apart.",
         "[Y] and [H] both serialize with a small gap ('the hub is single-threaded')",
         "medium",
+        note=_HW_2026_10_16 + ": after a burst of a dozen-plus unanswered device/<MAC>/keys_request (a probe script "
+        "and an older doctor), the X2 stopped answering every request while still pushing activity_control_up; a "
+        "power cycle fixed it. A single unanswered request (doctor's probe) left it answering. Consistent with a "
+        "one-at-a-time handler, not proof of it.",
     ),
     Assumption(
         "S-MQTT-REPLY-TIMEOUT",
@@ -179,6 +203,10 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "presses over MQTT are held off until then.",
         "none: [M] notes commands sent mid-macro can interrupt it, and has no completion signal over MQTT",
         "low",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": Watch TV's devices were fully on (picture, sound, input) about 5 s after the start, "
+        "inside the 6 s window; a VOL_UP sent ~4 s in was refused with 'Try again in 2s', and one after it went "
+        "through. Other activities' macros weren't timed.",
     ),
 )
 
