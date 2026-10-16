@@ -353,7 +353,7 @@ hub; the rest are verified against the simulator only (details and sources in [P
 | `S-MQTT-CONTROL`       | medium     | hardware-verified |
 | `S-MQTT-KEYS`          | medium     | hardware-verified |
 | `S-MQTT-MACRO`         | medium     | simulator-only |
-| `S-MQTT-FAVORITE`      | low        | simulator-only |
+| `S-MQTT-FAVORITE`      | low        | hardware-verified |
 | `S-MQTT-DEVICE`        | high       | simulator-only |
 | `S-MQTT-LISTS`         | medium     | hardware-verified |
 | `S-MQTT-DEVICE-KEYS`   | high       | hardware-verified |

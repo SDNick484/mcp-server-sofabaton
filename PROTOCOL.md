@@ -82,7 +82,7 @@ now (the same rule sofabaton-x applies).
 | `activity/<MAC>/activity_control_down`    | `{"data": {"activity_id": 101, "state": "on"}}`      | Start (`on`) or stop (`off`) an activity   | `S-MQTT-CONTROL`  | medium [Y] (seen) |
 | `activity/<MAC>/keys_control`             | `{"data": {"activity_id": 101, "key_id": 182}}`      | A hard button through an activity (`key_id` = the ButtonName code; VOL_UP = 182) | `S-MQTT-KEYS` | medium [Y] (seen) |
 | `activity/<MAC>/macro_keys_control`       | `{"data": {"activity_id": 101, "key_id": 40}}`       | Run a macro                                | `S-MQTT-MACRO`    | medium [Y]   |
-| `activity/<MAC>/favorites_keys_control`   | `{"data": {"activity_id": <device id>, "key_id": 9}}` | A favorite. The *device* id goes in `activity_id` ("Due to firmware design issue") | `S-MQTT-FAVORITE` | low [Y] only |
+| `activity/<MAC>/favorites_keys_control`   | `{"data": {"activity_id": <device id>, "key_id": 9}}` | A favorite. The *device* id goes in `activity_id` ("Due to firmware design issue") | `S-MQTT-FAVORITE` | low [Y] only (seen) |
 | `device/<MAC>/keys_control`               | `{"data": {"device_id": 1, "key_id": 7}}`            | A device's own command                     | `S-MQTT-DEVICE`   | high [M][H]  |
 | `activity/<MAC>/list_request`             | `{"data": "activity_list"}`                          | Ask for the activity list                  | `S-MQTT-LISTS`    | medium       |
 | `activity/<MAC>/{keys,macro_keys,favorites_keys}_request` | `{"data": {"activity_id": 101}}`    | Ask for an activity's keys, macros or favorites | `S-MQTT-LISTS` | medium    |

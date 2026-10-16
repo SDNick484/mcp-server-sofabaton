@@ -133,6 +133,9 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "Favorites go to activity/<MAC>/favorites_keys_control with the *device* id in the activity_id field.",
         "[Y] only ('Due to firmware design issue')",
         "low",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": Watch TV's favorites Netflix (device 1, on the TV) and Disney (device 6, on Home "
+        "Assistant) both opened from Claude, with the device id in activity_id; each sent twice, both worked.",
     ),
     Assumption(
         "S-MQTT-DEVICE",
