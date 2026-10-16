@@ -360,7 +360,7 @@ hub; the rest are verified against the simulator only (details and sources in [P
 | `S-MQTT-IDS`           | low        | simulator-only |
 | `S-MQTT-SERIAL`        | medium     | simulator-only |
 | `S-MQTT-REPLY-TIMEOUT` | low        | hardware-verified |
-| `S-MQTT-SETTLE`        | low        | simulator-only |
+| `S-MQTT-SETTLE`        | low        | hardware-verified |
 
 `test_assumptions.py` fails if this table and `assumptions.py` disagree.
 

@@ -194,6 +194,10 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "presses over MQTT are held off until then.",
         "none: [M] notes commands sent mid-macro can interrupt it, and has no completion signal over MQTT",
         "low",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": Watch TV's devices were fully on (picture, sound, input) about 5 s after the start, "
+        "inside the 6 s window; a VOL_UP sent ~4 s in was refused with 'Try again in 2s', and one after it went "
+        "through. Other activities' macros weren't timed.",
     ),
 )
 

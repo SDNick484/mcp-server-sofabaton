@@ -306,7 +306,7 @@ something odd, the tool descriptions are what to fix.
 | `S-MQTT-IDS`           | 6      | low               | yes (record the answer; nothing depends on it)  |
 | `S-MQTT-SERIAL`        | 6      | medium            | partly: it shows serial requests work, not that parallel ones fail |
 | `S-MQTT-REPLY-TIMEOUT` | 6      | low               | yes                                              |
-| `S-MQTT-SETTLE`        | 7, 8   | low               | yes (and tune `SOFABATON_MQTT_SETTLE_S`)         |
+| `S-MQTT-SETTLE`        | 7, 8   | low               | yes (seen 2026-10-16: ~5 s for Watch TV)         |
 
 ## What to send back if something fails
 
