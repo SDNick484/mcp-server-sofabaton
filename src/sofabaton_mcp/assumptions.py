@@ -118,6 +118,9 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         "the ButtonName code (VOL_UP = 182).",
         "[Y] (its key table matches sofabaton-x's ButtonName codes)",
         "medium",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": press_button VOL_UP repeat=2 on Watch TV published key_id 182 twice and the "
+        "receiver's volume went up, twice in a row.",
     ),
     Assumption(
         "S-MQTT-MACRO",
