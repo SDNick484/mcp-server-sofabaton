@@ -293,7 +293,7 @@ something odd, the tool descriptions are what to fix.
 | `S-REST-MODES`         | 5      | medium            | yes (the 409; the 503 needs the hub unplugged)   |
 | `S-REST-START`         | 4      | low               | yes                                              |
 | `S-X1-NO-MQTT`         | none   | high              | no: needs an X1 or X1S. Stays simulator-only     |
-| `S-MQTT-UP`            | 7      | high              | yes, with a Wifi Device bound to a key           |
+| `S-MQTT-UP`            | 7      | high              | yes (seen 2026-10-16: a remote button press)     |
 | `S-MQTT-STATE`         | 7      | high              | yes (seen 2026-10-16: on, and 255 for off)       |
 | `S-MQTT-MAC-CASE`      | 6      | medium            | yes                                              |
 | `S-MQTT-CONTROL`       | 8      | medium            | yes (seen 2026-10-16: start and power off)       |

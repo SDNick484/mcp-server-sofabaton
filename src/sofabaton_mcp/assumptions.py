@@ -81,6 +81,9 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         'A key bound to an MQTT Wifi Device publishes {"device_id", "key_id"} to <MAC>/up, QoS 0, never retained.',
         "[M] measured; openHAB forum user report agrees",
         "high",
+        status="hardware-verified",
+        note=_HW_2026_10_16 + ": a button bound to an MQTT Wifi Device was pressed on the physical remote, and the "
+        "owner saw the <MAC>/up message on the broker with mosquitto_sub.",
     ),
     Assumption(
         "S-MQTT-STATE",

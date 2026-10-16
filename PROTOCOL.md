@@ -63,7 +63,7 @@ Assistant). `<MAC>` is the hub's MAC as 12 hex digits with no separators.
 
 | Topic                                 | Payload                                       | Meaning                                                                       | Id               | Confidence |
 | ------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------- | ---------------- | ---------- |
-| `<MAC>/up`                            | `{"device_id": 3, "key_id": 1}`               | A key bound to an MQTT Wifi Device was pressed. QoS 0, never retained        | `S-MQTT-UP`      | high [M]   |
+| `<MAC>/up`                            | `{"device_id": 3, "key_id": 1}`               | A key bound to an MQTT Wifi Device was pressed. QoS 0, never retained        | `S-MQTT-UP`      | high [M] (seen) |
 | `activity/<MAC>/activity_control_up`  | `{"activity_id": 101, "state": "on"}`         | Every activity change, including ours, *early* in the power macro. `255` means all off (seen: also after we stop one) | `S-MQTT-STATE` | high [M][Y] (seen) |
 | `activity/<MAC>/list`                 | `{"data": [{"activity_id", "activity_name", "state"}]}` | Reply to `list_request`                                            | `S-MQTT-LISTS`   | medium [Y][H] |
 | `activity/<MAC>/keys_list`            | `{"data": [{"key_id", "key_name"}]}`          | Reply to `keys_request`                                                       | `S-MQTT-LISTS`   | medium     |

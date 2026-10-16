@@ -347,7 +347,7 @@ hub; the rest are verified against the simulator only (details and sources in [P
 | `S-REST-MODES`         | medium     | simulator-only |
 | `S-REST-START`         | low        | simulator-only |
 | `S-X1-NO-MQTT`         | high       | simulator-only |
-| `S-MQTT-UP`            | high       | simulator-only |
+| `S-MQTT-UP`            | high       | hardware-verified |
 | `S-MQTT-STATE`         | high       | hardware-verified |
 | `S-MQTT-MAC-CASE`      | medium     | hardware-verified |
 | `S-MQTT-CONTROL`       | medium     | hardware-verified |
