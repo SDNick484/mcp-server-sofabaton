@@ -49,6 +49,9 @@ class FakeX2:
         self.host, self.port = host, port
         self.username, self.password = username, password
         self.faults = X2Faults()
+        # A real X2 never answers device/<MAC>/keys_request (S-MQTT-DEVICE-KEYS, seen on hardware); tests
+        # of the reply parser set this to answer in the shape [H] documents.
+        self.answers_device_keys = False
         self.received: list[tuple[str, Any]] = []  # (topic, parsed payload) of every request
         self.connected = asyncio.Event()
         self._client: aiomqtt.Client | None = None
@@ -199,6 +202,8 @@ class FakeX2:
             return
         did = st.to_mqtt(device.device_id)
         if leaf == "keys_request":
+            if not self.answers_device_keys:
+                return  # like the real hub: silence (S-MQTT-DEVICE-KEYS)
             items = [{"key_id": cid, "key_name": label} for cid, label in device.commands]
             await self._publish(f"device/{mac}/keys_list", {"device_id": did, "key_count": len(items), "data": items})
         elif leaf == "keys_control":  # ASSUMPTION S-MQTT-DEVICE

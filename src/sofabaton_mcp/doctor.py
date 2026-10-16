@@ -36,7 +36,7 @@ from .client import SofabatonClient
 from .config import Settings
 from .logsafe import redact
 from .mqtt import ClientFactory, MqttHub
-from .protocol import normalize_mac
+from .protocol import DEVICE_KEYS_OVER_MQTT, normalize_mac
 
 TESTED_SERVER = "0.2"  # the sofabaton-x-server minor version this was built against
 
@@ -229,10 +229,18 @@ async def _mqtt_checks(
                 except SofabatonError:
                     report.warnings.append(f"The X2 didn't answer activity/<MAC>/{what} (S-MQTT-LISTS).")
         if devs:
+            # The X2 doesn't answer this (S-MQTT-DEVICE-KEYS), so silence is expected and not reported. An answer
+            # would be news: device commands over MQTT could then be turned on (protocol.DEVICE_KEYS_OVER_MQTT).
+            hub.reply_timeout = min(timeout, 3.0)  # silence is the expected answer; don't wait long for it
             try:
                 await hub.device_keys(devs[0][0])
+                if not DEVICE_KEYS_OVER_MQTT:
+                    report.warnings.append(
+                        "The X2 answered device/<MAC>/keys_request, which S-MQTT-DEVICE-KEYS says it doesn't: device "
+                        "commands over MQTT could be enabled. Please report this with `doctor --dump`."
+                    )
             except SofabatonError:
-                report.warnings.append("The X2 didn't answer device/<MAC>/keys_request (S-MQTT-LISTS).")
+                pass
         dump["mqtt"] = {"activities": acts, "devices": devs, "raw": hub.raw_log}
     finally:
         await hub.stop()

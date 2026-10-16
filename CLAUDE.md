@@ -93,7 +93,10 @@ We publish `activity_control_down`, `keys_control`, `macro_keys_control`,
 
 ## Status
 
-Verified against the simulator only. HARDWARE_VALIDATION.md is the checklist. Captures from
+First real X2 run 2026-10-16 (MQTT only): login, lists and uppercase-MAC topics confirmed; the X2
+never answers `device/<MAC>/keys_request`, so `protocol.DEVICE_KEYS_OVER_MQTT` is False and device
+targets over MQTT are refused up front (`S-MQTT-DEVICE-KEYS`). Everything else is simulator-only.
+HARDWARE_VALIDATION.md is the checklist. Captures from
 `doctor --dump` go in `tests/fixtures/recorded/`.
 
 ## Commands

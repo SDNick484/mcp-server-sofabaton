@@ -124,14 +124,27 @@ async def test_replay_works_on_a_simulator_recording(broker, state, x2, tmp_path
         "activity/<MAC>/macro_keys_list",
         "activity/<MAC>/favorites_keys_list",
         "device/<MAC>/list",
-        "device/<MAC>/keys_list",
     } <= topics
+    # Like a real X2, the simulator doesn't answer device key lists (S-MQTT-DEVICE-KEYS)
+    assert "device/<MAC>/keys_list" not in topics
     assert state.mac not in json.dumps(doc)
     # Add a state push and a press, as --listen would see them, and replay everything.
     doc["mqtt"]["raw"] += [
         {"topic": "activity/<MAC>/activity_control_up", "payload": {"activity_id": 255, "state": "off"}},
         {"topic": "<MAC>/up", "payload": {"device_id": 3, "key_id": 1}},
     ]
+    assert await check_recorded(doc) == []
+
+
+async def test_an_x2_that_answers_device_keys_is_reported_and_replayed(broker, state, x2, tmp_path):
+    """S-MQTT-DEVICE-KEYS turned out false on the owner's X2; if another firmware answers, doctor says so,
+    and the reply, in [H]'s shape, is in the dump and replays."""
+    x2.answers_device_keys = True
+    m = MqttSettings(broker[0], broker[1], False, None, None, state.mac)
+    report = await run_doctor(Settings(url=None, hub=None, mqtt=m), dump_dir=tmp_path)
+    assert any("answered device/<MAC>/keys_request" in w for w in report.warnings)
+    doc = json.loads((tmp_path / "sofabaton.json").read_text())
+    assert "device/<MAC>/keys_list" in {m["topic"] for m in doc["mqtt"]["raw"]}
     assert await check_recorded(doc) == []
 
 

@@ -369,6 +369,12 @@ class SofabatonClient:
             )
         elif not server_ok:
             limits.append(f"sofabaton-x-server: {sv.error if sv and sv.error else 'no session with the hub'}")
+        if mqtt_ok and not server_control and not p.DEVICE_KEYS_OVER_MQTT:
+            limits.append(
+                "Over MQTT, a device's own commands (list_commands/send_command with a device as target) are "
+                "unavailable: the X2 doesn't list them. Activities' buttons, macros and favorites work; device "
+                "commands need sofabaton-x-server."
+            )
         if observe and mqtt_ok:
             limits.append(
                 "The Sofabaton app holds sofabaton-x-server's proxy (observe mode): commands go over MQTT meanwhile, "
@@ -528,6 +534,18 @@ class SofabatonClient:
             ]
             return out
         mq = self._mqtt_hub()
+        if kind == "device" and not p.DEVICE_KEYS_OVER_MQTT:
+            # ASSUMPTION S-MQTT-DEVICE-KEYS: asking would only time out.
+            fix = (
+                "set up sofabaton-x-server for a device's own commands"
+                if self.api is None
+                else "close the Sofabaton app so sofabaton-x-server can send them"
+            )
+            raise SofabatonError(
+                "Over MQTT the X2 doesn't list a device's own commands (it never answers device/<MAC>/keys_request), "
+                "so they can't be named or sent this way. Use the activity's buttons, macros and favorites instead "
+                f"(name the activity, or omit target for the running one), or {fix}."
+            )
         if kind == "device":
             return [
                 CommandOption(label, "device", entity_id, k, "device")

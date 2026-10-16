@@ -12,7 +12,10 @@ An **X2** can also be reached over **MQTT**, either on its own or alongside the 
 live activity state, and keeps the hub controllable while the Sofabaton app is open. Every
 response tells the model which model it's talking to and what that hub can and can't do.
 
-> **Status: verified against the simulator only.** Nothing here has run against a real hub yet.
+> **Status: first contact with a real X2 over MQTT done (2026-10-16).** It logged in to the broker,
+> listed activities and devices, and answered on the expected topics. It also showed that the X2
+> doesn't list a device's own commands over MQTT, which the server now says up front. Control
+> commands and the sofabaton-x-server path are still verified against the simulator only.
 > Every protocol detail that hasn't been confirmed on hardware is a named assumption
 > ([PROTOCOL.md](PROTOCOL.md)), and [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md) is the
 > checklist for confirming them.
@@ -23,7 +26,8 @@ Not affiliated with Sofabaton.
 
 |                                                  | X1 / X1S         | X2 + server     | X2 + server + MQTT          | X2, MQTT only    |
 | ------------------------------------------------ | ---------------- | --------------- | --------------------------- | ---------------- |
-| Activities, buttons, macros, favorites, commands | yes              | yes             | yes                         | yes              |
+| Activities, buttons, macros, favorites           | yes              | yes             | yes                         | yes              |
+| A device's own commands                          | yes              | yes             | yes (not while the app is open) | no: the X2 doesn't list them over MQTT |
 | Find the remote; model and firmware              | yes              | yes             | yes                         | no               |
 | Presses of buttons bound to a Wifi Device        | yes (HTTP)       | yes             | yes                         | yes (MQTT)       |
 | Live activity state (pushed by the hub)          | no               | no              | yes                         | yes              |
@@ -333,8 +337,8 @@ What the tests cover:
 
 ## Verification status
 
-Everything is **verified against the simulator only**. These are the protocol assumptions the
-code depends on (details and sources in [PROTOCOL.md](PROTOCOL.md)):
+These are the protocol assumptions the code depends on. `hardware-verified` means seen on a real
+hub; the rest are verified against the simulator only (details and sources in [PROTOCOL.md](PROTOCOL.md)):
 
 | Assumption             | Confidence | Status         |
 | ---------------------- | ---------- | -------------- |
@@ -344,16 +348,17 @@ code depends on (details and sources in [PROTOCOL.md](PROTOCOL.md)):
 | `S-X1-NO-MQTT`         | high       | simulator-only |
 | `S-MQTT-UP`            | high       | simulator-only |
 | `S-MQTT-STATE`         | high       | simulator-only |
-| `S-MQTT-MAC-CASE`      | medium     | simulator-only |
+| `S-MQTT-MAC-CASE`      | medium     | hardware-verified |
 | `S-MQTT-CONTROL`       | medium     | simulator-only |
 | `S-MQTT-KEYS`          | medium     | simulator-only |
 | `S-MQTT-MACRO`         | medium     | simulator-only |
 | `S-MQTT-FAVORITE`      | low        | simulator-only |
 | `S-MQTT-DEVICE`        | high       | simulator-only |
-| `S-MQTT-LISTS`         | medium     | simulator-only |
+| `S-MQTT-LISTS`         | medium     | hardware-verified |
+| `S-MQTT-DEVICE-KEYS`   | high       | hardware-verified |
 | `S-MQTT-IDS`           | low        | simulator-only |
 | `S-MQTT-SERIAL`        | medium     | simulator-only |
-| `S-MQTT-REPLY-TIMEOUT` | low        | simulator-only |
+| `S-MQTT-REPLY-TIMEOUT` | low        | hardware-verified |
 | `S-MQTT-SETTLE`        | low        | simulator-only |
 
 `test_assumptions.py` fails if this table and `assumptions.py` disagree.
