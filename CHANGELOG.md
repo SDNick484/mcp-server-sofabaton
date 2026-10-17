@@ -1,13 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Changed
-
-- Without Cloudflare Access, `serve --http` refuses a `--public-host` and answers 403 to requests
-  a tunnel or proxy forwarded, so a tunnel without Access can't reach it (mcp-server-shared #4).
-  `--insecure-no-auth` turns this off, as before.
-
 ## [0.2.0] - 2026-10-16
 
 The first release on PyPI, and the first tested on a real hub.
@@ -30,6 +22,9 @@ activity change; and Wifi Device presses on `<MAC>/up`. Details in README's "Tes
   message it saw (MAC masked).
 - The Alpine install script now always installs the code it was given, even at the same version
   number, so re-running it upgrades.
+- Without Cloudflare Access, `serve --http` refuses a `--public-host` and answers 403 to requests
+  a tunnel or proxy forwarded, so a tunnel without Access can't reach it (mcp-server-shared #4).
+  `--insecure-no-auth` turns this off, as before.
 
 ### Added
 
