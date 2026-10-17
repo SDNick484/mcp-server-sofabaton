@@ -182,12 +182,12 @@ For Claude Code: `claude mcp add sofabaton -e SOFABATON_URL=http://192.168.1.70:
 
 > [!WARNING]
 > **This server turns your devices on and off. Don't put it on a network you don't trust without
-> authentication in front of it.** Over HTTP it refuses to listen on anything but `127.0.0.1`
-> unless Cloudflare Access is configured (or you pass `--insecure-no-auth`, meant for a trusted-LAN
-> test). But a loopback bind with no `CF_ACCESS_*` settings accepts every request it gets, so a
-> tunnel or reverse proxy pointed at it without Access in front, plus `--public-host` naming that
-> public hostname, puts your remote on the internet. With a tunnel, set `CF_ACCESS_TEAM_DOMAIN`
-> and `CF_ACCESS_AUD` so the server checks Access's signed assertion on every request itself.
+> authentication in front of it.** Without Cloudflare Access configured, the HTTP server serves
+> only requests that start on this machine: it won't listen on anything but `127.0.0.1`, won't
+> start with a `--public-host`, and answers 403 to any request a tunnel or proxy forwarded
+> (`Cf-Connecting-IP`, `X-Forwarded-For`, ...). `--insecure-no-auth` turns those checks off for a
+> trusted-LAN test. With a tunnel, set `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` so the server
+> checks Access's signed assertion on every request itself.
 
 As a service (Streamable HTTP), to share one instance between Claude Code, Claude Desktop and
 the mobile app through a Cloudflare Tunnel with Cloudflare Access in front:
