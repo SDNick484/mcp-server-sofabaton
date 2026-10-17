@@ -90,7 +90,7 @@ Names are resolved on whichever path is used, so ids never cross from one to the
 
 ```sh
 python -m venv ~/.venvs/sofabaton && . ~/.venvs/sofabaton/bin/activate
-pip install "mcp-server-sofabaton[mqtt]"     # or without [mqtt] for server-only (X1/X1S, or an X2 without MQTT)
+pip install mcp-server-sofabaton
 ```
 
 From source instead (for the newest code, or to run the tests):
@@ -98,11 +98,11 @@ From source instead (for the newest code, or to run the tests):
 ```sh
 git clone https://github.com/SDNick484/mcp-server-sofabaton.git && cd mcp-server-sofabaton
 python -m venv .venv && . .venv/bin/activate
-pip install -e ".[mqtt,dev]" && pytest
+pip install -e ".[dev]" && pytest
 ```
 
-Requires Python 3.11+. The `[mqtt]` extra adds one dependency, `aiomqtt` (which brings
-`paho-mqtt`).
+Requires Python 3.11+. MQTT support (`aiomqtt`, which brings `paho-mqtt`) is included; the
+`[mqtt]` extra older instructions mention still works and adds nothing.
 
 **Claim sofabaton-x-server.** Open its control panel and set up an admin account (Server
 settings > Access). Until you do, it lets anyone on the LAN edit and erase hubs. `doctor` warns
@@ -204,7 +204,7 @@ even with `--bind 0.0.0.0`: for LAN clients, also pass `--public-host <this mach
 ### As an OpenRC service on Alpine (e.g. a Proxmox LXC)
 
 `deploy/alpine/` installs it the same way as mcp-server-webos and -harmony, so all three can share
-an LXC: a venv in `/opt/mcp-server-sofabaton` (with the `[mqtt]` extra), a `mcp-sofabaton` system
+an LXC: a venv in `/opt/mcp-server-sofabaton`, a `mcp-sofabaton` system
 user, every setting in `/etc/mcp-server-sofabaton/env`, and `supervise-daemon` restarting it if
 it exits. Keep the broker password out of the env file: put it in
 `/etc/mcp-server-sofabaton/mqtt-password` (`0640 root:mcp-sofabaton`) and set
