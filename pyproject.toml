@@ -23,10 +23,13 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Home Automation",
 ]
-# Runtime needs only HTTP. The sofabaton-x library is a test dependency, to
-# check our copy of its button codes.
+# The sofabaton-x library is a test dependency, to check our copy of its button codes.
 dependencies = [
     "mcp>=2.3,<3",
+    # X2 MQTT. aiomqtt is the asyncio wrapper around paho-mqtt (Eclipse), the most widely
+    # used Python MQTT client; both are pure Python and pull in nothing else. A required
+    # dependency since 0.2.1: MQTT is the path most people use, and an X1/X1S carries it unused.
+    "aiomqtt>=2.3,<3",
     "httpx>=0.27",
     "pyjwt[crypto]>=2.10",   # verifying Cloudflare Access assertions (remote.py)
     "uvicorn>=0.31",         # the HTTP transport (remote.py)
@@ -39,10 +42,10 @@ Issues = "https://github.com/SDNick484/mcp-server-sofabaton/issues"
 Changelog = "https://github.com/SDNick484/mcp-server-sofabaton/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-# X2 MQTT support. aiomqtt is the asyncio wrapper around paho-mqtt (Eclipse),
-# the most widely used Python MQTT client; neither pulls in anything else.
-mqtt = ["aiomqtt>=2.3,<3"]
-dev = ["aiomqtt>=2.3,<3", "pytest>=8", "anyio>=4", "ruff>=0.6", "mypy>=1.11", "sofabaton-x>=0.2.3,<0.3", "httpx2"]
+# Empty since 0.2.1 (aiomqtt is a regular dependency); kept so `[mqtt]` in existing
+# install commands still resolves.
+mqtt = []
+dev = ["pytest>=8", "anyio>=4", "ruff>=0.6", "mypy>=1.11", "sofabaton-x>=0.2.3,<0.3", "httpx2"]
 
 [project.scripts]
 mcp-server-sofabaton = "sofabaton_mcp.cli:main"

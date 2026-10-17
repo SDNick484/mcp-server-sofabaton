@@ -35,8 +35,9 @@ jobs:
       - run: twine check --strict dist/*
       # The wheel must install and run on its own (no source tree next to it).
       - run: |
-          python -m venv /tmp/v && /tmp/v/bin/pip install "$(ls dist/*.whl)[mqtt]"
+          python -m venv /tmp/v && /tmp/v/bin/pip install "$(ls dist/*.whl)"  # no extras: MQTT must come with it
           /tmp/v/bin/mcp-server-sofabaton --version
+          /tmp/v/bin/python -c "import aiomqtt"
       - uses: actions/upload-artifact@v7
         with:
           name: dist

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1] - 2026-10-17
+
+### Changed
+
+- MQTT support is included: `aiomqtt` is a regular dependency, so `pip install
+  mcp-server-sofabaton` is all an X2 needs. The `[mqtt]` extra still resolves (to nothing), so
+  existing install commands keep working.
+
 ## [0.2.0] - 2026-10-16
 
 The first release on PyPI, and the first tested on a real hub.

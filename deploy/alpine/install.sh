@@ -6,7 +6,7 @@
 #
 # Layout (each part owned so the service can read its settings and change
 # nothing else):
-#   /opt/mcp-server-sofabaton/venv     the code (with the [mqtt] extra)   root:root               0755
+#   /opt/mcp-server-sofabaton/venv     the code                           root:root               0755
 #   /opt/mcp-server-sofabaton/run.sh   the service command                root:root               0755
 #   /etc/mcp-server-sofabaton/env      every setting (SOFABATON_*,        root:mcp-sofabaton      0640
 #                                        HTTP and Access)
@@ -30,12 +30,9 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 
 [ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 1; }
 
-# The [mqtt] extra (aiomqtt) is what reaches an X2 directly; it's one small
-# dependency and harmless on an X1/X1S, so it's always installed.
-case "$SRC" in
-	*://*) SPEC="mcp-server-sofabaton[mqtt] @ $SRC" ;;  # git+https://... or a URL
-	*) SPEC="$SRC[mqtt]" ;;                            # a checkout directory
-esac
+# A git+https URL or a checkout directory; pip takes either as it is. MQTT support
+# (aiomqtt) is a regular dependency, so there's no extra to add.
+SPEC="$SRC"
 
 # python3 and its venv module; git for the default git+https source. Every
 # compiled dependency ships a musl wheel, so no compiler is needed (the smoke

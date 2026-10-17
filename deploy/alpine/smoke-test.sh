@@ -2,7 +2,7 @@
 # CI: install and run the service in a stock python:3.12-alpine container,
 # against a simulated X2 on both paths (a fake sofabaton-x-server, and the
 # in-package MQTT broker with a fake X2). Proves the dependencies install on
-# musl (pydantic-core, cryptography, paho-mqtt via the [mqtt] extra), the install
+# musl (pydantic-core, cryptography, paho-mqtt under aiomqtt), the install
 # layout and permissions, that OpenRC starts and stops it, that run.sh gives
 # subcommands the service's environment, and that an MCP call over HTTP
 # reaches the hub on both paths.

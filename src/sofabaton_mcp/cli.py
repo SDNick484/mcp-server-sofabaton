@@ -160,7 +160,7 @@ async def _cmd_simulate(args: argparse.Namespace, ready: asyncio.Event | None = 
             from .sim.broker import Broker
             from .sim.fake_x2 import FakeX2
         except ImportError:
-            print("The X2's MQTT side needs aiomqtt: pip install 'mcp-server-sofabaton[mqtt]'", file=sys.stderr)
+            print("The X2's MQTT side needs aiomqtt (a dependency): pip install aiomqtt", file=sys.stderr)
             return 2
         host, port = "127.0.0.1", args.mqtt_port
         if args.broker:

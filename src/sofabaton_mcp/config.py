@@ -188,7 +188,7 @@ def _mqtt(env: dict[str, str] | os._Environ[str], problems: list[str]) -> MqttSe
     try:
         import aiomqtt  # noqa: F401
     except ImportError:
-        problems.append("MQTT is configured but aiomqtt isn't installed: pip install 'mcp-server-sofabaton[mqtt]'")
+        problems.append("MQTT is configured but aiomqtt isn't installed (it's a dependency): pip install aiomqtt")
         return None
     return MqttSettings(u.hostname, port, u.scheme == "mqtts", username, password, mac)
 

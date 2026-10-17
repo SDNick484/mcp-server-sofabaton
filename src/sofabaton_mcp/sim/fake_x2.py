@@ -9,7 +9,7 @@ amqtt), sharing its state with the fake REST server (hub_state.py).
 Payload shapes are written out here from the research (PROTOCOL.md), not
 imported from our client's protocol.py, so a mistake in one shows up as a
 test failure instead of being copied into both. Each is tagged with its
-assumption id. Requires the [mqtt] extra (aiomqtt).
+assumption id. Uses aiomqtt, like the real client.
 """
 
 from __future__ import annotations
