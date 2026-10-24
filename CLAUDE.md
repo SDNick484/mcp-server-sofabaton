@@ -26,15 +26,17 @@ explain the reasoning behind non-obvious changes instead of only making them.
 - `src/sofabaton_mcp/server.py`: MCP tools (`MCPServer` from `mcp` 2.x)
 - `src/sofabaton_mcp/assumptions.py`: every unverified protocol claim (id, source, confidence,
   status)
-- `src/sofabaton_mcp/limits.py`: rate limits and per-call caps
+- `src/sofabaton_mcp/limits.py`: this server's rate-limit numbers and per-call caps (the mechanism,
+  `TokenBucket` and `refusal`, is shared `ratelimit.py`)
 - **Shared with the siblings; the source of truth is mcp-server-shared.** `src/sofabaton_mcp/remote.py`,
-  `logsafe.py`, `tasks.py` (`stop_task`, which `mqtt.py` and `client.py` use), `scripts/sync_shared.py`,
-  and `tests/test_remote.py`, `test_logsafe.py`, `test_tasks.py` (rendered with this package's name);
+  `logsafe.py`, `tasks.py` (`stop_task`, which `mqtt.py` and `client.py` use), `ratelimit.py`,
+  `scripts/sync_shared.py`, and `tests/test_remote.py`, `test_logsafe.py`, `test_tasks.py`,
+  `test_ratelimit.py` (rendered with this package's name);
   mcp-server-shared's `shared.toml` is the full list. Don't edit them here: change them in
   mcp-server-shared, then run `python scripts/sync_shared.py --update` here and commit the files
   together with `shared.lock`. `python scripts/sync_shared.py --check` (CI's `shared-drift` job) fails
   on any difference from the locked commit; a weekly scheduled run also fails once mcp-server-shared
-  `main` has moved past it. `limits.py` is shared with Harmony only, by hand (not synced).
+  `main` has moved past it.
 - `src/sofabaton_mcp/doctor.py`, `cli.py`: `serve`, `check`, `call`, `doctor`, `simulate`
 - `src/sofabaton_mcp/sim/`: `FakeServer` (Starlette), `Broker` (MQTT 3.1.1), `FakeX2`, shared
   `FakeHubState`, fixtures. Used by tests *and* `simulate`

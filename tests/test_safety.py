@@ -13,8 +13,9 @@ import pytest
 from sofabaton_mcp.api import ServerAPI, SofabatonError
 from sofabaton_mcp.client import SofabatonClient
 from sofabaton_mcp.config import MqttSettings, Settings, load_settings
-from sofabaton_mcp.limits import ACTIVITY_CAPACITY, PRESS_CAPACITY, TokenBucket
+from sofabaton_mcp.limits import ACTIVITY_CAPACITY, PRESS_CAPACITY
 from sofabaton_mcp.logsafe import RedactingFormatter, redact
+from sofabaton_mcp.ratelimit import TokenBucket
 
 from .conftest import HUB, MUSIC, WATCH_SHIELD
 
