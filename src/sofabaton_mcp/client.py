@@ -46,9 +46,9 @@ from .limits import (
     MIN_DELAY_MS,
     PRESS_CAPACITY,
     PRESS_RATE,
-    TokenBucket,
 )
 from .mqtt import ClientFactory, MqttHub
+from .ratelimit import TokenBucket, refusal
 from .tasks import stop_task
 
 log = logging.getLogger(__name__)
@@ -572,11 +572,8 @@ class SofabatonClient:
     def _limit(self, bucket: TokenBucket, n: int, what: str) -> None:
         wait = bucket.take(n)
         if wait:
-            when = "more than the limit allows at once" if wait == float("inf") else f"try again in {wait:.0f}s"
-            raise SofabatonError(
-                f"Rate limit: refusing to {what} ({when}). This guards against runaway loops; if it's deliberate, wait "
-                "and retry."
-            )
+            # No device name: one server, one hub.
+            raise SofabatonError(refusal(what, wait))
 
     def _check_settle(self, path: Path) -> None:
         """ASSUMPTION S-MQTT-SETTLE: over MQTT nothing says when a power macro ends, so wait out a window."""

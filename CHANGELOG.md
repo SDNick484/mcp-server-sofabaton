@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Rate limits use the shared `TokenBucket` and `refusal` (`ratelimit.py`) instead of a private copy.
+  A refused call now says "try again in 1s" rather than "0s" when less than a second is left, and
+  "it's more than the limit allows at once" when a call can never fit.
+
 ## [0.2.1] - 2026-10-17
 
 ### Changed
