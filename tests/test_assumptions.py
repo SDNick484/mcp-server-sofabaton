@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from sofabaton_mcp.assumptions import ASSUMPTIONS, BY_ID
+from sofabaton_mcp.assumptions import ASSUMPTIONS, BY_ID, contradicted, unverified
 
 ROOT = Path(__file__).parent.parent
 ID = re.compile(r"\bS-[A-Z0-9]+(?:-[A-Z0-9]+)*\b")
@@ -29,6 +29,18 @@ def test_ids_are_unique_and_well_formed():
     ids = [a.id for a in ASSUMPTIONS]
     assert len(ids) == len(set(ids))
     assert all(ID.fullmatch(i) for i in ids)
+
+
+def test_every_assumption_has_exactly_one_status_query():
+    """unverified / contradicted / hardware-verified split the registry: nothing is counted twice or dropped."""
+    verified = [a for a in ASSUMPTIONS if a.status == "hardware-verified"]
+    groups = [unverified(), contradicted(), verified]
+    assert sum(len(g) for g in groups) == len(ASSUMPTIONS)
+    assert {a.id for g in groups for a in g} == set(BY_ID)
+
+
+def test_unverified_means_simulator_only():
+    assert unverified() and all(a.status == "simulator-only" for a in unverified())
 
 
 @pytest.mark.parametrize("doc", DOCS)

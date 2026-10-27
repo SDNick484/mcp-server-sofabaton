@@ -26,21 +26,13 @@ To record a hardware result, set ``status`` to "hardware-verified" (or
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from .registry import Assumption, by_id
+from .registry import contradicted as _contradicted
+from .registry import unverified as _unverified
 
-Confidence = Literal["high", "medium", "low"]
-Status = Literal["simulator-only", "hardware-verified", "hardware-contradicted"]
-
-
-@dataclass(frozen=True)
-class Assumption:
-    id: str
-    claim: str
-    source: str
-    confidence: Confidence
-    status: Status = "simulator-only"
-    note: str = ""
+# The record, its statuses and the queries are shared with the sibling servers (registry.py, from
+# mcp-server-shared); only this list is about the Sofabaton.
+__all__ = ["ASSUMPTIONS", "BY_ID", "Assumption", "contradicted", "unverified"]
 
 
 # Hardware runs, cited by the notes below.
@@ -210,8 +202,14 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
     ),
 )
 
-BY_ID = {a.id: a for a in ASSUMPTIONS}
+BY_ID = by_id(ASSUMPTIONS)  # raises at import if an id appears twice
 
 
 def unverified() -> list[Assumption]:
-    return [a for a in ASSUMPTIONS if a.status != "hardware-verified"]
+    """Not yet seen on hardware ("simulator-only"). A contradicted one *was* checked, so it isn't listed here."""
+    return _unverified(ASSUMPTIONS)
+
+
+def contradicted() -> list[Assumption]:
+    """Seen *not* to hold on hardware; the code no longer relies on these."""
+    return _contradicted(ASSUMPTIONS)

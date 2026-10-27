@@ -31,12 +31,13 @@ from pathlib import Path
 from typing import Any
 
 from .api import ServerAPI, SofabatonError
-from .assumptions import unverified
+from .assumptions import contradicted, unverified
 from .client import SofabatonClient
 from .config import Settings
 from .logsafe import redact
 from .mqtt import ClientFactory, MqttHub
 from .protocol import DEVICE_KEYS_OVER_MQTT, normalize_mac
+from .registry import doctor_lines
 
 TESTED_SERVER = "0.2"  # the sofabaton-x-server minor version this was built against
 
@@ -57,6 +58,7 @@ class Report:
     warnings: list[str] = field(default_factory=list)
     heard: list[str] = field(default_factory=list)  # --listen
     unverified_assumptions: list[str] = field(default_factory=list)
+    contradicted_assumptions: list[str] = field(default_factory=list)
     dumped_to: str | None = None
 
     @property
@@ -278,6 +280,7 @@ async def run_doctor(
 ) -> Report:
     report = Report(versions(), list(settings.problems))
     report.unverified_assumptions = [a.id for a in unverified()]
+    report.contradicted_assumptions = [a.id for a in contradicted()]
     dump: dict[str, Any] = {}
     mac = settings.mqtt.mac if settings.mqtt else None
     model = None
@@ -334,11 +337,10 @@ def render(report: Report) -> str:
         lines += [f"     {h}" for h in report.heard]
     if report.dumped_to:
         lines.append(f"Dumped to {report.dumped_to}")
-    lines.append(
-        f"{len(report.unverified_assumptions)} protocol assumptions not yet confirmed on hardware: "
-        + ", ".join(report.unverified_assumptions)
-        + " (see HARDWARE_VALIDATION.md)"
-    )
+    # verbose=True: doctor has always listed every unconfirmed id (the count alone says little to someone
+    # deciding what to check on the hub next). Contradicted ones come first, each in full.
+    lines += doctor_lines(report.unverified_assumptions, report.contradicted_assumptions, verbose=True)
+    lines.append("See HARDWARE_VALIDATION.md for how to confirm them.")
     lines.append("All checks passed." if report.ok else "Some checks failed; see the -> hints above.")
     return redact("\n".join(lines))
 
