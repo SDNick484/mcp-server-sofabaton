@@ -156,6 +156,39 @@ async def test_send_command_and_press_over_rest(make, fake):
     assert fake.sends() == [(SHIELD, 9), (WATCH_SHIELD, 182), (WATCH_SHIELD, 182), (ONKYO, 7)]
 
 
+def _fail_send_from(monkeypatch, n: int, message: str) -> None:
+    """Make ServerAPI.send raise from its n-th call on (1-based); earlier calls go through."""
+    real, calls = ServerAPI.send, 0
+
+    async def flaky(self, hub, entity_id, command_id):
+        nonlocal calls
+        calls += 1
+        if calls >= n:
+            raise SofabatonError(message)
+        return await real(self, hub, entity_id, command_id)
+
+    monkeypatch.setattr(ServerAPI, "send", flaky)
+
+
+async def test_a_burst_that_fails_midway_says_how_many_presses_went_out(make, fake, monkeypatch):
+    """The hub got 2 of the 4, so the caller must not resend all 4 (the volume would overshoot)."""
+    fake.running = WATCH_SHIELD
+    _fail_send_from(monkeypatch, 3, "connection reset")
+    with pytest.raises(SofabatonError, match=r"Sent 2 of 4 presses before disconnect: connection reset"):
+        await make().press("VOL_UP", None, repeat=4)
+    assert fake.sends() == [(WATCH_SHIELD, 182), (WATCH_SHIELD, 182)]
+
+
+async def test_a_burst_that_fails_on_the_first_press_keeps_the_original_error(make, fake, monkeypatch):
+    """Nothing was sent, so there's no count to report: the error is passed on untouched."""
+    fake.running = WATCH_SHIELD
+    _fail_send_from(monkeypatch, 1, "connection reset")
+    with pytest.raises(SofabatonError) as err:
+        await make().press("VOL_UP", None, repeat=4)
+    assert str(err.value) == "connection reset" and err.value.__cause__ is None
+    assert fake.sends() == []
+
+
 async def test_unknown_command_and_button_send_nothing(make, fake):
     c = make()
     with pytest.raises(SofabatonError, match="has no command 'Erase'"):

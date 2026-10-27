@@ -242,6 +242,152 @@ async def test_reconnects_after_a_broker_restart(make, x2, broker):
     await eventually(lambda: c.mqtt is not None and c.mqtt.connected, timeout=5)
 
 
+# --- recovering a dropped connection before sending -------------------------------------------
+def hub_for(broker, state, *, password: str | None = None, factory=None) -> MqttHub:
+    m = MqttSettings(broker[0], broker[1], False, "u" if password else None, password, state.mac)
+    return MqttHub(m, state.mac, client_factory=factory)
+
+
+async def test_ensure_connected_wakes_a_hub_sleeping_in_backoff(broker, state, monkeypatch):
+    """With a 30 s backoff, only the wake-up can explain a reconnect within the 2 s ensure_connected allows."""
+    b = in_package(broker)
+    monkeypatch.setattr(MqttHub, "retry_delay", 30.0)
+    hub = hub_for(broker, state)
+    await hub.start()
+    try:
+        await eventually(lambda: hub.connected)
+        await b.kick()
+        await eventually(lambda: not hub.connected, timeout=2)
+        loop = asyncio.get_running_loop()
+        t = loop.time()
+        await hub.ensure_connected()
+        assert hub.connected and loop.time() - t < 1.5
+    finally:
+        await hub.stop()
+
+
+async def test_publish_after_a_drop_reconnects_first(broker, state, monkeypatch):
+    b = in_package(broker)
+    monkeypatch.setattr(MqttHub, "retry_delay", 30.0)
+    hub = hub_for(broker, state)
+    await hub.start()
+    try:
+        await eventually(lambda: hub.connected)
+        await b.kick()
+        await eventually(lambda: not hub.connected, timeout=2)
+        await hub.publish("key_ctl", {"data": 1})
+        await eventually(lambda: [m.topic for m in b.published].count(hub.t["key_ctl"]) == 1)  # QoS 0: async
+    finally:
+        await hub.stop()
+
+
+async def test_ensure_connected_doesnt_hammer_a_broker_that_rejected_the_login(broker, state):
+    b = in_package(broker)
+    b.users = {"u": "right"}
+    hub = hub_for(broker, state, password="wrong")
+    await hub.start()
+    try:
+        await eventually(lambda: hub.auth_failed)
+        loop = asyncio.get_running_loop()
+        t = loop.time()
+        with pytest.raises(SofabatonError, match="rejected the login"):
+            await hub.ensure_connected()
+        assert loop.time() - t < 0.5  # no 2 s wait, and (auth_retry_delay) no extra login attempt
+    finally:
+        await hub.stop()
+
+
+async def test_a_failed_publish_is_reported_and_the_connection_replaced(broker, state, monkeypatch):
+    """The wedge this guards against: aiomqtt still thinks it's connected, we've marked it down, and nothing
+    ever sets it up again. The reconnect request has to end the old connection, not just shorten a sleep."""
+    import aiomqtt
+
+    monkeypatch.setattr(MqttHub, "retry_delay", 30.0)  # only the reconnect request can bring it back in time
+    made: list[object] = []
+    failures = 1
+
+    class FlakyPublish(aiomqtt.Client):
+        async def publish(self, *args, **kwargs):
+            nonlocal failures
+            if failures:
+                failures -= 1
+                raise aiomqtt.MqttError("simulated publish failure")
+            return await super().publish(*args, **kwargs)
+
+    def factory(*args, **kwargs):
+        made.append(object())
+        return FlakyPublish(*args, **kwargs)
+
+    hub = hub_for(broker, state, factory=factory)
+    await hub.start()
+    try:
+        await eventually(lambda: hub.connected)
+        with pytest.raises(SofabatonError, match=r"MQTT publish failed \(simulated publish failure\)"):
+            await hub.publish("key_ctl", {"data": 1})
+        await eventually(lambda: hub.connected and len(made) == 2, timeout=3)
+        await hub.publish("key_ctl", {"data": 2})
+    finally:
+        await hub.stop()
+
+
+async def test_a_press_after_an_idle_drop_recovers_the_path(make, x2, broker, monkeypatch):
+    b = in_package(broker)
+    monkeypatch.setattr(MqttHub, "retry_delay", 30.0)
+    c = await connected(await make())
+    await b.kick()
+    await eventually(lambda: c.mqtt is not None and not c.mqtt.connected, timeout=2)
+    assert await c._control_path() == "mqtt"
+    assert c.mqtt is not None and c.mqtt.connected
+
+
+async def test_status_reports_a_dropped_connection_without_waiting_for_it(make, x2, broker, monkeypatch):
+    b = in_package(broker)
+    monkeypatch.setattr(MqttHub, "retry_delay", 30.0)
+    c = await connected(await make())
+    await c.status()  # the first call may wait out the startup grace (test_the_first_call_waits_for_the_broker)
+    await b.kick()
+    await eventually(lambda: c.mqtt is not None and not c.mqtt.connected, timeout=2)
+    loop = asyncio.get_running_loop()
+    t = loop.time()
+    st = await c.status()
+    assert loop.time() - t < 0.5 and st["via"] is None and st["mqtt"]["connected"] is False
+
+
+def _drop_publishes_from(c: SofabatonClient, monkeypatch, n: int) -> None:
+    """From the n-th publish on (1-based), the hub fails the way a lost broker connection does."""
+    assert c.mqtt is not None
+    real, calls = c.mqtt.publish, 0
+
+    async def dropping(key, payload):
+        nonlocal calls
+        calls += 1
+        if calls >= n:
+            raise SofabatonError("MQTT publish failed (Not connected)")
+        await real(key, payload)
+
+    monkeypatch.setattr(c.mqtt, "publish", dropping)
+
+
+async def test_an_mqtt_burst_cut_by_a_drop_says_how_many_presses_went_out(make, x2, state, monkeypatch):
+    c = await connected(await make(settle_s=0))
+    await c.start_activity("Watch Shield")
+    _drop_publishes_from(c, monkeypatch, 3)
+    with pytest.raises(SofabatonError, match=r"Sent 2 of 5 presses before disconnect: MQTT publish failed"):
+        await c.press("VOL_UP", None, repeat=5)
+    await eventually(lambda: len(state.executed) == 3)  # the start, then the two presses that got out
+    assert executed(state)[1:] == [("mqtt", "key", WATCH_SHIELD, 182)] * 2
+
+
+async def test_an_mqtt_burst_failing_on_the_first_press_keeps_the_original_error(make, x2, state, monkeypatch):
+    c = await connected(await make(settle_s=0))
+    await c.start_activity("Watch Shield")
+    _drop_publishes_from(c, monkeypatch, 1)
+    with pytest.raises(SofabatonError) as err:
+        await c.press("VOL_UP", None, repeat=5)
+    assert str(err.value) == "MQTT publish failed (Not connected)"
+    assert [e.what for e in state.executed] == ["start"]
+
+
 async def test_dry_run_over_mqtt_publishes_nothing(make, x2, state, broker):
     c = await connected(await make(dry_run=True))
     outcome, _ = await c.start_activity("Watch Shield")

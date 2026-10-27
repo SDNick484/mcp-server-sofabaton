@@ -72,6 +72,9 @@ class MqttHub:
         self._lock = asyncio.Lock()
         self._waiters: list[_Waiter] = []
         self._state_changed = asyncio.Event()
+        # Set to cut the backoff sleep short, or to abandon a connection we've decided is dead (a failed
+        # publish): either way _run_forever reconnects now instead of waiting out retry_delay.
+        self._reconnect_requested = asyncio.Event()
         self.connected = False
         self.auth_failed = False
         self.last_error: str | None = None
@@ -132,10 +135,11 @@ class MqttHub:
                     for key in p.SUBSCRIBED:
                         await client.subscribe(self.t[key], qos=0)
                     self.connected, self.auth_failed, self.last_error = True, False, None
+                    # A request made while we were still connecting is answered by this connection.
+                    self._reconnect_requested.clear()
                     delay = self.retry_delay
                     log.info("MQTT: connected to %s for X2 %s", self.broker, self.mac)
-                    async for message in client.messages:
-                        self._dispatch(str(message.topic), message.payload, bool(message.retain))
+                    await self._read_until_reconnect(client)
             except aiomqtt.MqttError as exc:
                 self.auth_failed = self._is_auth_error(exc)
                 self.last_error = str(exc)
@@ -146,8 +150,54 @@ class MqttHub:
                 for w in self._waiters:
                     if not w.future.done():
                         w.future.set_exception(SofabatonError(f"The MQTT broker at {self.broker} disconnected."))
-            await asyncio.sleep(self.auth_retry_delay if self.auth_failed else delay)
+            await self._backoff(self.auth_retry_delay if self.auth_failed else delay)
             delay = min(delay * 2, 60.0)
+
+    async def _read_until_reconnect(self, client: Any) -> None:
+        """Dispatch messages until the connection drops (aiomqtt raises) or a reconnect is requested.
+
+        Without the second exit, a publish that failed on a connection aiomqtt still thinks is up would leave
+        `connected` False for good: nothing would ever end this loop, so nothing would set it True again.
+        """
+
+        async def read() -> None:
+            async for message in client.messages:
+                self._dispatch(str(message.topic), message.payload, bool(message.retain))
+
+        reader = asyncio.ensure_future(read())
+        waker = asyncio.ensure_future(self._reconnect_requested.wait())
+        try:
+            await asyncio.wait({reader, waker}, return_when=asyncio.FIRST_COMPLETED)
+            if reader.done():
+                reader.result()  # raises the MqttError that ended the connection
+        finally:
+            for t in (reader, waker):
+                t.cancel()
+            await asyncio.wait({reader, waker}, timeout=1.0)  # bounded: see stop()'s note on dropped cancels
+
+    async def _backoff(self, seconds: float) -> None:
+        """Sleep before reconnecting, unless a reconnect is requested (then return at once)."""
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._reconnect_requested.wait(), seconds)
+        self._reconnect_requested.clear()
+
+    def request_reconnect(self) -> None:
+        self._reconnect_requested.set()
+
+    async def ensure_connected(self, timeout: float = 2.0) -> None:
+        """Make sure the broker link is up before we send, waiting up to `timeout` for a dropped one.
+
+        An idle connection can die between calls (broker restart, NAT timeout) and sit in backoff for up to a
+        minute; this wakes it. A rejected login isn't retried here (that's what auth_retry_delay is for), so it
+        raises at once. Raises SofabatonError if the link is still down.
+        """
+        if not self.connected and not self.auth_failed:
+            self.request_reconnect()
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + timeout
+            while not (self.connected or self.auth_failed) and loop.time() < deadline:
+                await asyncio.sleep(0.05)
+        self._require()
 
     # --- inbound ---------------------------------------------------------------------------
     def _dispatch(self, topic: str, raw: Any, retained: bool) -> None:
@@ -233,8 +283,16 @@ class MqttHub:
         return self._client
 
     async def _publish(self, topic: str, payload: Any) -> None:
+        import aiomqtt
+
+        await self.ensure_connected()
         client = self._require()
-        await client.publish(topic, json.dumps(payload), qos=0, retain=False)
+        try:
+            await client.publish(topic, json.dumps(payload), qos=0, retain=False)
+        except aiomqtt.MqttError as exc:
+            self.connected, self._client, self.last_error = False, None, str(exc)
+            self.request_reconnect()
+            raise SofabatonError(f"MQTT publish failed ({exc})") from exc
 
     async def publish(self, key: str, payload: Any) -> None:
         async with self._lock:
