@@ -17,7 +17,7 @@ import pytest
 
 from sofabaton_mcp.api import ServerAPI
 from sofabaton_mcp.config import MqttSettings, Settings
-from sofabaton_mcp.doctor import listen, render, run_doctor, to_json
+from sofabaton_mcp.doctor import Report, listen, render, run_doctor, to_json
 from sofabaton_mcp.sim.fake_server import FakeServer
 from sofabaton_mcp.sim.fake_x2 import FakeX2
 from sofabaton_mcp.sim.hub_state import load_state
@@ -53,6 +53,16 @@ async def test_doctor_all_good_over_rest(fake):
     assert "OK   identity  X2 'Living Room X2', firmware 300, MAC xxxxxxxx56EF" in text
     assert "All checks passed." in text
     assert "S-REST-API" in text  # the unverified assumptions are listed every time
+
+
+def test_doctor_lists_contradicted_assumptions_before_the_unconfirmed_ones():
+    """Each contradicted assumption changed the code, so doctor shows them in full, ahead of the unconfirmed list."""
+    report = Report({}, [], unverified_assumptions=["X-ONE", "X-TWO"], contradicted_assumptions=["X-THREE"])
+    text = render(report)
+    assert text.index("Contradicted on hardware, no longer relied on (1):") < text.index(
+        "Not yet confirmed on hardware (2):"
+    )
+    assert all(f"   {i}" in text for i in ("X-ONE", "X-TWO", "X-THREE"))
 
 
 async def test_doctor_explains_observe_mode(fake):

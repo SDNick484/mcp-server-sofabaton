@@ -15,6 +15,13 @@
 
 ### Changed
 
+- Synced the shared files to mcp-server-shared `b405485` (`remote.py`, `logsafe.py`, `tasks.py`,
+  `ratelimit.py`, their tests and `scripts/sync_shared.py`), which also adds the shared `registry.py`.
+- The assumption record and its queries (`Assumption`, `unverified`, `contradicted`) now come from the
+  shared `registry.py`; `assumptions.py` keeps only the Sofabaton list. `unverified()` means "not yet seen
+  on hardware" (`simulator-only`), so a contradicted assumption is no longer counted as unconfirmed.
+  `doctor` lists contradicted assumptions in full, ahead of the unconfirmed ones (none today), and its
+  `--json` report gains `contradicted_assumptions`.
 - Rate limits use the shared `TokenBucket` and `refusal` (`ratelimit.py`) instead of a private copy.
   A refused call now says "try again in 1s" rather than "0s" when less than a second is left, and
   "it's more than the limit allows at once" when a call can never fit.
