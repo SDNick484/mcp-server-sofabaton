@@ -27,6 +27,7 @@ Capabilities (reported by get_status, so the model knows what this hub can do):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import Callable
@@ -303,20 +304,34 @@ class SofabatonClient:
             + self._x2_hint()
         )
 
-    async def _read_path(self) -> Path:
+    async def _recover_mqtt(self) -> None:
+        """Before giving up on MQTT, let a dropped (idle) connection come back. Only reached when the server
+        path is already unavailable, so a healthy server never pays for this. A login the broker rejected or
+        a recovery that times out leaves MQTT down; _no_path then explains why."""
+        if self.mqtt is None or self.mqtt_blocked or self.mqtt.connected:
+            return
+        with contextlib.suppress(SofabatonError):
+            await self.mqtt.ensure_connected()
+
+    async def _read_path(self, recover: bool = True) -> Path:
+        """Pick the path for a read. recover=False for status(), which reports now and never waits."""
         await self._mqtt_startup()
         sv = await self._server_view()
         if sv is not None and sv.reachable and sv.status is not None and sv.status["hub_connected"]:
             return "server"
+        if recover:
+            await self._recover_mqtt()
         if self._mqtt_ok():
             return "mqtt"
         raise self._no_path(sv, control=False)
 
-    async def _control_path(self) -> Path:
+    async def _control_path(self, recover: bool = True) -> Path:
         await self._mqtt_startup()
         sv = await self._server_view()
         if sv is not None and sv.reachable and sv.status is not None and sv.status["mode"] == "control":
             return "server"
+        if recover:
+            await self._recover_mqtt()
         if self._mqtt_ok():
             return "mqtt"
         raise self._no_path(sv, control=True)
@@ -416,11 +431,11 @@ class SofabatonClient:
         via: Path | None = None
         outdated: bool | None = None
         try:
-            via = await self._control_path()
+            via = await self._control_path(recover=False)
         except SofabatonError:
             via = None
         try:
-            got = await self._running(await self._read_path())
+            got = await self._running(await self._read_path(recover=False))
             running = got[1] if got else None
         except SofabatonError:
             pass
@@ -684,9 +699,14 @@ class SofabatonClient:
         for i in range(repeat):
             if i:
                 await asyncio.sleep(gap)
-            result = send()
-            if asyncio.iscoroutine(result):
-                await result
+            try:
+                result = send()
+                if asyncio.iscoroutine(result):
+                    await result
+            except SofabatonError as exc:
+                if i:  # tell the caller the hub saw some of the burst, so it doesn't blindly resend all of it
+                    raise SofabatonError(f"Sent {i} of {repeat} presses before disconnect: {exc}") from exc
+                raise
 
     async def press(
         self, button: str, target: str | None, repeat: int = 1, delay_ms: int | None = None
@@ -721,6 +741,7 @@ class SofabatonClient:
         if self.settings.dry_run:
             return Outcome(False, path, sent, dry_run=True), where
         mq = self._mqtt_hub()
+        await mq.ensure_connected()
         await self._send_repeated(lambda: mq.publish("key_ctl", payload), repeat, gap)
         return Outcome(True, path, sent), where
 
@@ -759,6 +780,7 @@ class SofabatonClient:
         if self.settings.dry_run:
             return Outcome(False, path, sent, dry_run=True), opt.label, where
         mq = self._mqtt_hub()
+        await mq.ensure_connected()
         await self._send_repeated(lambda: mq.publish(key, payload), repeat, gap)
         return Outcome(True, path, sent), opt.label, where
 

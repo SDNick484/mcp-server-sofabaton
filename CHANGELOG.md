@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- MQTT: a connection that dropped while idle is brought back before a command is sent, instead of the call
+  failing until the next retry (up to a minute later). `MqttHub.ensure_connected()` wakes the reconnect loop
+  and waits up to 2 s; a rejected login still fails at once and isn't retried.
+- MQTT: a failed publish now says so ("MQTT publish failed (...)"), drops the connection and reconnects
+  immediately, so it can't leave the hub marked disconnected over a connection that is actually up.
+- A repeated press or command that fails part-way says how many went out ("Sent 2 of 5 presses before
+  disconnect: ..."), so a retry doesn't resend the ones the hub already got. A failure on the first press is
+  reported unchanged.
+
 ### Changed
 
 - Rate limits use the shared `TokenBucket` and `refusal` (`ratelimit.py`) instead of a private copy.
