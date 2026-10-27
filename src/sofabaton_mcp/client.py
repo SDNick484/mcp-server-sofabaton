@@ -32,7 +32,7 @@ import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
 
@@ -265,6 +265,25 @@ class SofabatonClient:
         deadline = loop.time() + self.mqtt_startup_grace
         while not (m.connected or m.auth_failed) and loop.time() < deadline:
             await asyncio.sleep(0.05)
+
+    async def health_check(self) -> dict[str, Any]:
+        """For `serve --http`'s /healthz: can we reach the hub right now, and how?
+
+        Answers from the current state, without waiting: no MQTT startup grace (that's kept for the first tool
+        call, see _mqtt_startup) and no reconnect attempt, so a monitor's poll never changes what a tool call
+        does. /healthz is answered before authentication, so the failure carries no detail (no broker address,
+        no server error text); get_status and `doctor` say why.
+        """
+        sv = await self._server_view()
+        path: Path | None = None
+        if sv is not None and sv.reachable and sv.status is not None and sv.status["hub_connected"]:
+            path = "server"
+        elif self._mqtt_ok():
+            path = "mqtt"
+        if path is None:
+            raise SofabatonError("Hub unreachable")
+        name = self.hub_name or (f"X2 {self.mqtt.mac[-4:]}" if self.mqtt else None)
+        return {"status": "ok", "hub": name, "via": path}
 
     def _mqtt_ok(self) -> bool:
         return self.mqtt is not None and self.mqtt.connected and self.mqtt_blocked is None

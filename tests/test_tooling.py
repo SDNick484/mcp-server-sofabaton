@@ -16,8 +16,11 @@ from pathlib import Path
 import pytest
 
 from sofabaton_mcp.api import ServerAPI
+from sofabaton_mcp.assumptions import ASSUMPTIONS
 from sofabaton_mcp.config import MqttSettings, Settings
 from sofabaton_mcp.doctor import Report, listen, render, run_doctor, to_json
+from sofabaton_mcp.logsafe import redact
+from sofabaton_mcp.registry import doctor_summary
 from sofabaton_mcp.sim.fake_server import FakeServer
 from sofabaton_mcp.sim.fake_x2 import FakeX2
 from sofabaton_mcp.sim.hub_state import load_state
@@ -97,6 +100,21 @@ async def test_doctor_on_an_x1_with_mqtt_configured_says_x2_only(broker):
     m = MqttSettings(broker[0], broker[1], False, None, None, None)
     report = await doctor(fake, server_settings(mqtt=m))
     assert any("this is an X1: MQTT features need an X2" in w for w in report.warnings)
+
+
+async def test_doctor_json_carries_the_shared_registry_summary(fake):
+    """The same `assumptions` block as every sibling's doctor --json: counts plus every list in full."""
+    doc = json.loads(to_json(await doctor(fake)))
+    assert {"ok", "versions", "checks", "unverified_assumptions", "contradicted_assumptions", "assumptions"} <= set(doc)
+    s = doc["assumptions"]
+    # Redacted like the rest of the report: S-MQTT-MAC-CASE's example MAC comes out as xxxxxxxx56EF.
+    assert s == json.loads(redact(json.dumps(doctor_summary(ASSUMPTIONS))))
+    assert "02AB34CD" not in json.dumps(s)
+    assert (
+        s["total"] == len(ASSUMPTIONS) == s["unverified_count"] + s["contradicted_count"] + s["hardware_verified_count"]
+    )
+    assert [a["id"] for a in s["unverified"]] == doc["unverified_assumptions"]  # the two views agree
+    assert {"id", "claim", "confidence", "source"} == set(s["unverified"][0])
 
 
 async def test_doctor_json_and_dump_are_redacted(fake, tmp_path):

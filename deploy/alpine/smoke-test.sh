@@ -65,6 +65,10 @@ mkdir -p /run/openrc && touch /run/openrc/softlevel
 rc-service mcp-server-sofabaton start
 for _ in $(seq 50); do curl -fsS http://127.0.0.1:8714/healthz && break; sleep 0.2; done
 rc-service mcp-server-sofabaton status
+STEP='healthz'
+# /healthz reflects the hub (503 when it can't be reached), not just a live process: here, the simulated X2
+# through the fake sofabaton-x-server.
+curl -fsS http://127.0.0.1:8714/healthz | grep -q '"via": "server"'
 
 STEP='service user'
 # The process runs as the service user, not root. (busybox ps truncates user

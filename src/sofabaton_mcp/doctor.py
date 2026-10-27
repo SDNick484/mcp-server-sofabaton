@@ -31,13 +31,13 @@ from pathlib import Path
 from typing import Any
 
 from .api import ServerAPI, SofabatonError
-from .assumptions import contradicted, unverified
+from .assumptions import ASSUMPTIONS, contradicted, unverified
 from .client import SofabatonClient
 from .config import Settings
 from .logsafe import redact
 from .mqtt import ClientFactory, MqttHub
 from .protocol import DEVICE_KEYS_OVER_MQTT, normalize_mac
-from .registry import doctor_lines
+from .registry import doctor_lines, doctor_summary
 
 TESTED_SERVER = "0.2"  # the sofabaton-x-server minor version this was built against
 
@@ -348,4 +348,7 @@ def render(report: Report) -> str:
 def to_json(report: Report) -> str:
     doc = asdict(report)
     doc["ok"] = report.ok
+    # The shared registry summary (every count, every list in full), the same block every sibling's doctor
+    # --json carries, so one script can watch all of them (e.g. fail when contradicted_count rises).
+    doc["assumptions"] = doctor_summary(ASSUMPTIONS)
     return redact(json.dumps(doc, indent=1, default=str))

@@ -201,6 +201,11 @@ Every request must carry a valid Access JWT (`Cf-Access-Jwt-Assertion`). The che
 flags are documented in `src/sofabaton_mcp/remote.py`. The Host-header (DNS-rebinding) checks stay on
 even with `--bind 0.0.0.0`: for LAN clients, also pass `--public-host <this machine's LAN IP>`.
 
+`GET /healthz` needs no JWT, so a local monitor (Uptime Kuma, a Proxmox hook) can poll it. It answers
+200 `{"status": "ok", "hub": "Living Room X2", "via": "server"}` (or `"via": "mqtt"`) while the hub is
+reachable on either path, and 503 `{"status": "degraded", "error": "Hub unreachable"}` when it isn't.
+The 503 body gives no reason, since it's unauthenticated; `get_status` or `doctor` say why.
+
 ### As an OpenRC service on Alpine (e.g. a Proxmox LXC)
 
 `deploy/alpine/` installs it the same way as mcp-server-webos and -harmony, so all three can share

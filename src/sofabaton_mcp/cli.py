@@ -315,11 +315,12 @@ def main(argv: list[str] | None = None) -> None:
     _setup_logging(args)
     if getattr(args, "dry_run", False):
         os.environ["SOFABATON_DRY_RUN"] = "1"  # read by load_settings in the server's lifespan
-    from .server import mcp  # imported late: the other commands don't need the server code
+    from .server import health_check, mcp  # imported late: the other commands don't need the server code
 
     if getattr(args, "http", False):
         try:
-            remote.serve_http(mcp, remote.http_config(args))
+            # /healthz reports whether the hub is reachable (200) or not (503), not just that the process is up.
+            remote.serve_http(mcp, remote.http_config(args), health_check=health_check)
         except remote.ConfigError as exc:
             parser.exit(2, f"mcp-server-sofabaton: {exc}\n")
     else:
