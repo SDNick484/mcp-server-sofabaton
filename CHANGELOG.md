@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-27
+
 ### Added
 
 - `serve --http`: `/healthz` reports whether the hub is reachable (200 with the hub name and path, `server`
