@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- `serve --http`: `/healthz` reports whether the hub is reachable (200 with the hub name and path, `server`
+  or `mqtt`) or not (503), instead of always 200 while the process is up. It reads the current state only:
+  it never waits for MQTT or triggers a reconnect. The container smoke test checks it.
+- `doctor --json` carries the shared registry summary under `assumptions` (every count, and every
+  unverified, contradicted and hardware-verified assumption in full), the same block as the sibling servers.
+
 ### Fixed
 
 - MQTT: a connection that dropped while idle is brought back before a command is sent, instead of the call

@@ -20,14 +20,14 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 from pydantic import Field
 from typing_extensions import TypedDict
 
-from .api import PressPage, ServerAPI
+from .api import PressPage, ServerAPI, SofabatonError
 from .client import Outcome, Path, SofabatonClient, Status
 from .config import ButtonName, load_settings
 from .limits import MAX_DELAY_MS, MAX_REPEAT, MIN_DELAY_MS
@@ -40,6 +40,13 @@ _client: SofabatonClient | None = None
 def client() -> SofabatonClient:
     assert _client is not None, "server lifespan has not started"
     return _client
+
+
+async def health_check() -> dict[str, Any]:
+    """`serve --http`'s /healthz (remote.py answers 200 with this, or 503 if it raises)."""
+    if _client is None:
+        raise SofabatonError("Server not started")
+    return await _client.health_check()
 
 
 @asynccontextmanager
