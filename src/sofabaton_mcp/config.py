@@ -12,6 +12,11 @@ activity state, presses, and control while the Sofabaton app holds the REST
 proxy. MQTT alone works with no server at all. With neither set, the default
 is a server on localhost:8480 (the original behavior).
 
+  Direct (SOFABATON_HUB_IP)           X2, MQTT-only setups. The one thing MQTT
+      can't do, finding the remote, done over the hub's own TCP protocol
+      (direct.py). Ignored when a server is configured: the server holds the
+      hub's only session, and has its own find-remote route.
+
 There is deliberately no setting for a sofabaton-x-server API token. The server
 lets anyone on the LAN read and *control* (send, start/stop, find the remote)
 without one, and requires a token only for *writes*: editing, deleting,
@@ -24,6 +29,7 @@ Loading never fails: problems become sentences in ``Settings.problems``
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,6 +39,7 @@ from urllib.parse import unquote, urlparse
 from .protocol import normalize_mac
 
 DEFAULT_URL = "http://localhost:8480"
+DEFAULT_DIRECT_PORT = 8200  # where the hub connects back; the same port sofabaton-x uses
 
 # --- Allow-list ---------------------------------------------------------------
 # Hard buttons on the remote, named as the library's ButtonName (tests check
@@ -150,6 +157,9 @@ class Settings:
     # macro and never says when the macro is done, so presses are held off this
     # long after a change. ASSUMPTION S-MQTT-SETTLE
     settle_s: float = 6.0
+    # The hub's IPv4 address, for find_remote without a server (direct.py); None: not set up.
+    hub_ip: str | None = None
+    direct_port: int = DEFAULT_DIRECT_PORT  # TCP port we listen on for the hub's connect-back
     problems: tuple[str, ...] = ()
 
 
@@ -193,6 +203,35 @@ def _mqtt(env: dict[str, str] | os._Environ[str], problems: list[str]) -> MqttSe
     return MqttSettings(u.hostname, port, u.scheme == "mqtts", username, password, mac)
 
 
+def _direct(env: dict[str, str] | os._Environ[str], url: str | None, problems: list[str]) -> tuple[str | None, int]:
+    port = DEFAULT_DIRECT_PORT
+    if raw_port := env.get("SOFABATON_DIRECT_PORT"):
+        try:
+            port = int(raw_port)
+            if not 1 <= port <= 65535:
+                raise ValueError
+        except ValueError:
+            problems.append(
+                f"SOFABATON_DIRECT_PORT {raw_port!r} should be a TCP port, 1-65535; using {DEFAULT_DIRECT_PORT}"
+            )
+            port = DEFAULT_DIRECT_PORT
+    raw = (env.get("SOFABATON_HUB_IP") or "").strip()
+    if not raw:
+        return None, port
+    try:
+        ip = ipaddress.IPv4Address(raw)
+    except ValueError:
+        problems.append(f"SOFABATON_HUB_IP {raw!r} isn't an IPv4 address; finding the remote directly is off")
+        return None, port
+    if url is not None:
+        problems.append(
+            "SOFABATON_HUB_IP is ignored while sofabaton-x-server is configured: the server holds the hub's session "
+            "and finds the remote itself. Unset it, or set SOFABATON_URL=none for MQTT only."
+        )
+        return None, port
+    return str(ip), port
+
+
 def load_settings() -> Settings:
     env = os.environ
     problems: list[str] = []
@@ -223,11 +262,14 @@ def load_settings() -> Settings:
         except ValueError:
             problems.append(f"SOFABATON_MQTT_SETTLE_S {settle_raw!r} should be seconds, 0-120; using 6")
             settle = 6.0
+    hub_ip, direct_port = _direct(env, url, problems)
     return Settings(
         url=url,
         hub=env.get("SOFABATON_HUB") or None,
         mqtt=mqtt,
         dry_run=_flag(env.get("SOFABATON_DRY_RUN")),
         settle_s=settle,
+        hub_ip=hub_ip,
+        direct_port=direct_port,
         problems=tuple(problems),
     )

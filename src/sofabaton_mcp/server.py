@@ -116,7 +116,7 @@ class CommandList(TypedDict):
 class ActionResult(TypedDict):
     outcome: Literal["done", "unchanged", "dry_run"]
     detail: str
-    via: Path  # "server" (sofabaton-x-server) or "mqtt" (the X2 directly)
+    via: Path  # "server" (sofabaton-x-server), "mqtt" (the X2's broker link) or "direct" (the hub's own TCP)
     sent: list[str]  # requests or publishes sent (or that would be, in dry-run); the MAC shows as <MAC>
 
 
@@ -221,7 +221,10 @@ async def send_command(
 
 @mcp.tool(title="Find the remote", annotations=_ACT)
 async def find_remote() -> ActionResult:
-    """Make the physical remote beep so it can be found. Needs sofabaton-x-server (any model)."""
+    """Make the physical remote beep so it can be found. Through sofabaton-x-server (any model), or on an X2
+    without a server, directly over the hub's own protocol (SOFABATON_HUB_IP), which works only while the Sofabaton
+    app is closed. The direct path has no confirmation: ask the user whether they hear it.
+    """
     return _result(await client().find_remote(), "make the remote beep", "")
 
 

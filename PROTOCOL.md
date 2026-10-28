@@ -16,6 +16,7 @@ where it depends on the claim, `doctor` lists the unconfirmed ones, and
 | [S] | [sofabaton-x-server](https://pypi.org/project/sofabaton-x-server/) 0.2.4                                                                                                                | Run here with no hub attached. Its OpenAPI document is in `tests/fixtures/`, and some behavior was read from its source        |
 | [M] | [m3tac0de/home-assistant-sofabaton-x1s](https://github.com/m3tac0de/home-assistant-sofabaton-x1s), `docs/protocol/live-hub-testing.md` (checked at c33d4dc, 2026-10-05)               | The sofabaton-x author's bench notes against real X1S and X2 hubs. **Measured**                                                 |
 | [Y] | [yomonpet/ha-sofabaton-hub](https://github.com/yomonpet/ha-sofabaton-hub) (e57ffcb, 2026-08-20)                                                                                         | A Home Assistant integration for the X2 over MQTT. [M] calls it the official one; that isn't confirmed on sofabaton.com        |
+| [L] | [sofabaton-x](https://pypi.org/project/sofabaton-x/) 0.2.5 source (`x1_proxy.py`, `transport_bridge.py`, `protocol_const.py`)                                                       | The library behind [S] and [M]: how it frames, sends `CALL_ME` and finds the remote                                             |
 | [H] | [RepairGuyDK/com.repairguydk.sofabatonx2](https://github.com/RepairGuyDK/com.repairguydk.sofabatonx2) (c328b6b, 2026-08-30)                                                              | A Homey app for the X2 over MQTT                                                                                                 |
 
 **Confidence:**
@@ -32,14 +33,15 @@ where it depends on the claim, `doctor` lists the unconfirmed ones, and
 | Start / power off an activity, with confirmation | yes                    | yes             | yes                  | yes              |
 | Remote buttons, macros, favorites                | yes                  | yes             | yes                  | yes ¹            |
 | A device's own commands                          | yes                  | yes             | yes (not while the app is open) | no ³ |
-| Find the remote                                | yes                      | yes             | yes (not while the app is open) | no ²  |
+| Find the remote                                | yes                      | yes             | yes (not while the app is open) | with `SOFABATON_HUB_IP` ² |
 | Model, firmware, MAC                           | yes                      | yes             | yes                  | no               |
 | Wifi Device presses (`get_recent_presses`)     | yes (HTTP callback)      | yes             | yes                  | yes (`<MAC>/up`) |
 | Live activity state (pushed early in the macro) | no                      | no              | yes                  | yes              |
 | Control while the Sofabaton app is open        | no                       | no              | yes (falls back to MQTT) | yes          |
 
 ¹ Over MQTT, hard buttons go through an activity (`activity/<MAC>/keys_control`).
-² None of the topics in the sources makes the remote beep.
+² None of the topics in the sources makes the remote beep. With `SOFABATON_HUB_IP`, it goes over
+the hub's own TCP protocol instead (below), while the app is closed.
 ³ The X2 doesn't answer `device/<MAC>/keys_request` (`S-MQTT-DEVICE-KEYS`, seen on hardware), so there
 are no key ids to send with `device/<MAC>/keys_control`. An activity's own commands still work.
 
@@ -99,6 +101,29 @@ now (the same rule sofabaton-x applies).
 | `S-MQTT-SETTLE`        | After an announced activity change, the macro finishes within `SOFABATON_MQTT_SETTLE_S` (6 s). Presses over MQTT wait until then                             | none. [M] notes mid-macro commands can interrupt it, and there's no completion signal. Seen: ~5 s for Watch TV | low |
 | `S-MQTT-DEVICE-KEYS`   | The X2 does **not** answer `device/<MAC>/keys_request`, so a device's own commands can't be listed or sent over MQTT                 | seen on hardware 2026-10-16: no reply for any of six devices; [Y] disables its device features | high (seen) |
 | `S-MQTT-IDS`           | Nothing says MQTT ids equal sofabaton-x-server's, so ids never cross transports: names are resolved per path                                                  | none: a design choice that avoids depending on it                         | low        |
+
+## Direct: the hub's own TCP protocol (find_remote only, X2, no server)
+
+This is the protocol the Sofabaton app speaks and sofabaton-x proxies. We use the least of it
+that makes the remote beep, in one short session per call (`direct.py`), and nothing else: the
+same protocol also edits and erases the hub. Every frame is `A5 5A <opcode hi> <opcode lo>
+<payload> <sum8>`, the opcode's high byte is the payload length, and `sum8` is the low byte of
+the sum of the bytes before it ([M] `frame-format.md`).
+
+| Step | Frame | Notes | Id | Confidence |
+| ---- | ----- | ----- | -- | ---------- |
+| UDP to hub:8102 | `CALL_ME` `0x0CC3`: 6 zero bytes, our IPv4, our TCP port | Repeated every 2 s until the hub connects back to that port over TCP | `S-DIRECT-CALL-ME` | high (seen) |
+| TCP | `REQ_BANNER` `0x0001` | Answered with a banner: `0x1502` X2, `0x1D02` X1S, `0x1A02` X1; payload starts with the MAC (never logged) | `S-DIRECT-BANNER` | high (seen on X2) |
+| TCP | `FIND_REMOTE_X2` `0x0323` `00 00 08` | The remote beeps. **No reply**, so it can't be confirmed | `S-DIRECT-FIND` | high (seen) |
+| TCP | (hang up after 1 s) | Our choice; the probe that worked held ~4 s | `S-DIRECT-LINGER` | low |
+
+`S-DIRECT-EXCLUSIVE` (medium, inferred): the hub serves one client, and ignores `CALL_ME` while
+the app or a proxy holds it, so a direct session can't disturb the app; it just times out. [M]
+says the hub stops advertising while the app is connected, and [L] sends `CALL_ME` only while
+it isn't connected; nobody has measured the hub's answer to a second client.
+
+The X1/X1S use `FIND_REMOTE` `0x0023` with no payload ([M]). We don't send it: nothing here has
+been tried on those models, and they reach the remote through sofabaton-x-server anyway.
 
 ## What isn't known (and how the code copes)
 

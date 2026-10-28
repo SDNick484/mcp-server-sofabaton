@@ -228,7 +228,7 @@ Then, one at a time, watching the TV:
 | `mcp-server-sofabaton call send_command command="<a macro from step 2>"`                    | The macro runs                                                    | S-MQTT-MACRO      |
 | `mcp-server-sofabaton call send_command command="<a favorite from step 2>"`                 | The favorite opens (e.g. the app or channel)                      | S-MQTT-FAVORITE   |
 | `mcp-server-sofabaton call send_command command="$CMD" target="$DEV"`                       | Refused at once: `doesn't list a device's own commands`          | S-MQTT-DEVICE-KEYS |
-| `mcp-server-sofabaton call find_remote`                                                    | Refused: `find_remote needs sofabaton-x-server`                  | (expected)        |
+| `mcp-server-sofabaton call find_remote`                                                    | Refused: `find_remote needs sofabaton-x-server or SOFABATON_HUB_IP` (with it set: step 8a) | (expected) |
 | `mcp-server-sofabaton call power_off`                                                      | Everything turns off                                              | S-MQTT-CONTROL    |
 
 Each `call` is a separate process, and the settle window (presses held off for 6 s after an
@@ -241,6 +241,38 @@ be running ... Try again in Ns`.
 **S-MQTT-SETTLE:** compare the macro time you noted in step 7 with 6 s. If the macro takes
 longer, set `SOFABATON_MQTT_SETTLE_S` to it (plus a second) and write the number in the note.
 If presses sent during the macro interrupted it, the guard is doing its job.
+
+## 8a. Find the remote directly (X2, no server)
+
+Still with `SOFABATON_URL=none`. The direct session needs the hub to itself, so stop
+sofabaton-x-server if it runs anywhere (it also listens on TCP 8200) and close the Sofabaton
+app on every phone and tablet.
+
+```sh
+export SOFABATON_HUB_IP=<the X2's IP>            # your router's client list
+mcp-server-sofabaton doctor                      # expect: OK direct  X2 connected back in 0.xxs ...
+mcp-server-sofabaton call find_remote            # the remote beeps; "via": "direct"
+```
+
+`doctor` opens the session and reads the banner but sends no find-remote frame, so the remote
+stays quiet. If it says the hub didn't connect back and the app is closed, check that the hub can
+reach this machine on TCP 8200 (firewall; a container needs host networking). If something else
+uses 8200, set `SOFABATON_DIRECT_PORT`.
+
+| Check                                                                                         | Expected                                       | Confirms             |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------- | -------------------- |
+| `doctor`                                                                                      | `OK direct`, `X2`, a connect time under a second | S-DIRECT-CALL-ME, S-DIRECT-BANNER |
+| `call find_remote`                                                                            | The remote beeps; the result says it's unconfirmed | S-DIRECT-FIND, S-DIRECT-LINGER |
+| `call get_status` right after                                                                 | `"mqtt": {"connected": true, ...}`             | S-DIRECT-FIND (the MQTT link survives) |
+| Open the Sofabaton app, leave it open, then `call find_remote`                               | Refused after ~10 s: `didn't connect back ... close the Sofabaton app`, and the app keeps working | S-DIRECT-EXCLUSIVE |
+
+**S-DIRECT-LINGER:** `find_remote` hangs up 1 s after the frame (the probe that first worked
+held on for about 4 s). If `call find_remote` reports success but the remote stays silent while
+`find_remote_probe.py` from the same machine makes it beep, the 1 s is too short: note it.
+
+**S-DIRECT-EXCLUSIVE:** what matters is that the app isn't kicked off. If the app loses its
+connection, or the remote beeps anyway, record that in the note: it changes the error message
+and the warning in the README.
 
 **S-MQTT-FAVORITE** is the least certain (one source, and a firmware quirk). If the favorite
 goes to the wrong device or nothing happens, record what did happen.
@@ -307,6 +339,11 @@ something odd, the tool descriptions are what to fix.
 | `S-MQTT-SERIAL`        | 6      | medium            | partly: it shows serial requests work, not that parallel ones fail |
 | `S-MQTT-REPLY-TIMEOUT` | 6      | low               | yes                                              |
 | `S-MQTT-SETTLE`        | 7, 8   | low               | yes (seen 2026-10-16: ~5 s for Watch TV)         |
+| `S-DIRECT-CALL-ME`     | 8a     | high              | yes (seen 2026-10-27: 0.13 s, across subnets)    |
+| `S-DIRECT-BANNER`      | 8a     | high              | yes for the X2 (seen 2026-10-27: 0x1502)         |
+| `S-DIRECT-FIND`        | 8a     | high              | yes (seen 2026-10-27: beeped, no reply)          |
+| `S-DIRECT-LINGER`      | 8a     | low               | yes                                              |
+| `S-DIRECT-EXCLUSIVE`   | 8a     | medium            | yes                                              |
 
 ## What to send back if something fails
 

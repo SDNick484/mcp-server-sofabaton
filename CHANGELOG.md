@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- `find_remote` without sofabaton-x-server (X2, MQTT-only setups): with `SOFABATON_HUB_IP` set, it opens a
+  short session on the hub's own TCP protocol (`CALL_ME` on UDP 8102, the hub connects back on
+  `SOFABATON_DIRECT_PORT`, default 8200), checks the banner says X2, sends the one find-remote frame and hangs
+  up. The hub doesn't acknowledge it, so the result says the beep is the only confirmation. Works only while
+  the Sofabaton app is closed; otherwise it times out with that advice. Seen working on an X2 on 2026-10-27.
+  `get_status` lists `find_remote` and a matching limitation; `doctor` checks the session without the
+  find-remote frame, so it stays quiet. New assumptions `S-DIRECT-CALL-ME`, `S-DIRECT-BANNER`,
+  `S-DIRECT-FIND` (hardware-verified), `S-DIRECT-LINGER` and `S-DIRECT-EXCLUSIVE`; HARDWARE_VALIDATION.md
+  step 8a. `SOFABATON_HUB_IP` is ignored, with a config problem, when a server is configured.
+
 ## [0.3.0] - 2026-10-27
 
 ### Added

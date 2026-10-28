@@ -14,6 +14,8 @@ Sources, shortened in ``source``:
        (benches against real X1S/X2 hubs)
   [S]  sofabaton-x-server 0.2.4, run here with no hub attached; its OpenAPI
        document is in tests/fixtures/
+  [L]  the sofabaton-x library 0.2.5's source (x1_proxy.py, transport_bridge.py,
+       protocol_const.py): how it frames, sends CALL_ME and finds the remote
 
 Confidence:
   high   - measured on a real hub by [M], or recorded from the real server [S]
@@ -37,6 +39,10 @@ __all__ = ["ASSUMPTIONS", "BY_ID", "Assumption", "contradicted", "unverified"]
 
 # Hardware runs, cited by the notes below.
 _HW_2026_10_16 = "2026-10-16, the owner's X2 over MQTT (Home Assistant's Mosquitto) from the service on LXC210"
+_HW_2026_10_27 = (
+    "2026-10-27, the owner's X2, from a standalone probe (the same frames as direct.py) on a Proxmox LXC in another "
+    "subnet than the hub, with the X2's MQTT link and Home Assistant's MQTT integration running"
+)
 
 ASSUMPTIONS: tuple[Assumption, ...] = (
     # --- sofabaton-x-server (any model) -----------------------------------------------------
@@ -199,6 +205,50 @@ ASSUMPTIONS: tuple[Assumption, ...] = (
         note=_HW_2026_10_16 + ": Watch TV's devices were fully on (picture, sound, input) about 5 s after the start, "
         "inside the 6 s window; a VOL_UP sent ~4 s in was refused with 'Try again in 2s', and one after it went "
         "through. Other activities' macros weren't timed.",
+    ),
+    # --- Direct: the hub's own TCP protocol, for find_remote without a server (X2) ------------------
+    Assumption(
+        "S-DIRECT-CALL-ME",
+        "A CALL_ME frame (0x0CC3: six zero bytes, our IPv4, our TCP port) sent to the hub on UDP 8102 makes it connect "
+        "back to that address and port over TCP within seconds.",
+        "[M] connection-flow.md; [L] transport_bridge.py repeats it every 2 s until the hub connects",
+        "high",
+        status="hardware-verified",
+        note=_HW_2026_10_27 + ": the X2 connected back 0.13 s after the first CALL_ME, across subnets.",
+    ),
+    Assumption(
+        "S-DIRECT-BANNER",
+        "REQ_BANNER (0x0001) is answered with a family-0x02 banner whose opcode names the model: 0x1502 X2, "
+        "0x1D02 X1S, 0x1A02 X1. Its payload starts with the hub's MAC.",
+        "[M] connection-flow.md (opcodes for all three); the X2's measured",
+        "high",
+        status="hardware-verified",
+        note=_HW_2026_10_27 + ": a 0x1502 banner of 21 bytes, starting with the MAC and ending with the hub's name. "
+        "The X1 and X1S opcodes are [M]'s only; we use them just to name the model when refusing.",
+    ),
+    Assumption(
+        "S-DIRECT-FIND",
+        "On an X2, FIND_REMOTE_X2 (0x0323, payload 00 00 08) after the banner makes the remote beep. The hub sends no "
+        "reply, so nothing confirms it but the sound.",
+        "[M] opcodes.md; [L] x1_proxy.find_remote (sends it and waits for nothing)",
+        "high",
+        status="hardware-verified",
+        note=_HW_2026_10_27 + ": the remote beeped; no frame came back in the 4 s the probe waited, and the hub kept "
+        "the connection open. The X2's MQTT link stayed connected (get_status right after).",
+    ),
+    Assumption(
+        "S-DIRECT-LINGER",
+        "Holding the session 1 s after FIND_REMOTE_X2 before hanging up is enough for the hub to act on it.",
+        "none: our choice. The probe that worked held the session about 4 s",
+        "low",
+    ),
+    Assumption(
+        "S-DIRECT-EXCLUSIVE",
+        "While another client holds the hub's session (the Sofabaton app, sofabaton-x-server, another proxy), the hub "
+        "ignores CALL_ME, so a direct session times out rather than interrupting the other client.",
+        "[M] connection-flow.md (the hub stops advertising while the app is connected); [L] only sends CALL_ME while "
+        "it isn't connected. Inferred, not measured",
+        "medium",
     ),
 )
 

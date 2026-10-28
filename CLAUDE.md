@@ -5,6 +5,8 @@
 `mcp-server-sofabaton`: an MCP server for Sofabaton X1/X1S/X2 hubs. Every model works through
 **sofabaton-x-server** (REST), which owns the hub session via the `sofabaton-x` library. An
 **X2** can also be reached over **MQTT** (its own broker link), alone or alongside the server.
+With no server, `find_remote` (which has no MQTT topic) goes **directly** over the hub's own TCP
+protocol when `SOFABATON_HUB_IP` is set (`direct.py`).
 Sibling of `mcp-server-onkyo`, `mcp-server-shieldtv` and `mcp-server-harmony`.
 
 **This is a learning project.** The owner wants to understand how MCP servers are built, so
@@ -13,7 +15,7 @@ explain the reasoning behind non-obvious changes instead of only making them.
 ## Layout
 
 - `src/sofabaton_mcp/config.py`: settings (`SOFABATON_URL`, `SOFABATON_HUB`, `SOFABATON_MQTT_*`,
-  `SOFABATON_DRY_RUN`), validated into `Settings.problems`; the button allow-list
+  `SOFABATON_HUB_IP`, `SOFABATON_DIRECT_PORT`, `SOFABATON_DRY_RUN`), validated into `Settings.problems`; the button allow-list
   (`ButtonName`, `BUTTON_CODES`)
 - `src/sofabaton_mcp/api.py`: REST transport; TypedDicts from the server's OpenAPI; `_request`
   allow-lists routes
@@ -21,6 +23,8 @@ explain the reasoning behind non-obvious changes instead of only making them.
   assumption id)
 - `src/sofabaton_mcp/mqtt.py`: `MqttHub`, one broker connection: reconnect, request/reply,
   pushed state, presses ring, settle window
+- `src/sofabaton_mcp/direct.py`: `DirectHub`, one short session on the hub's own TCP protocol
+  (CALL_ME, connect-back, banner, `FIND_REMOTE_X2`), for find_remote without a server
 - `src/sofabaton_mcp/client.py`: `SofabatonClient`: path choice per call (server in control mode,
   else MQTT), names -> ids per path, confirmation, capabilities/limitations, rate limits
 - `src/sofabaton_mcp/server.py`: MCP tools (`MCPServer` from `mcp` 2.x)
@@ -39,7 +43,8 @@ explain the reasoning behind non-obvious changes instead of only making them.
   `main` has moved past it.
 - `src/sofabaton_mcp/doctor.py`, `cli.py`: `serve`, `check`, `call`, `doctor`, `simulate`
 - `src/sofabaton_mcp/sim/`: `FakeServer` (Starlette), `Broker` (MQTT 3.1.1), `FakeX2`, shared
-  `FakeHubState`, fixtures. Used by tests *and* `simulate`
+  `FakeHubState`, fixtures. Used by tests *and* `simulate`. `FakeDirectHub` (answers CALL_ME by
+  connecting back) is tests-only
 - `deploy/alpine/`: OpenRC service, install script and the container
   smoke test CI runs; same layout as mcp-server-webos's and -harmony's. Every setting is in the
   env file, so `run.sh <subcommand>` runs doctor/check/call with the service's environment
@@ -47,7 +52,8 @@ explain the reasoning behind non-obvious changes instead of only making them.
   real broker), `test_openapi_contract` (vs the recorded 0.2.4 OpenAPI), `test_client`,
   `test_mqtt`, `test_tools` (in-process MCP `Client`), `test_safety`, `test_tooling`,
   `test_recorded` (replays `doctor --dump` captures), `test_assumptions`, `test_stdio`,
-  `test_remote`, `test_tasks`, `test_api`, `test_config`. Async tests use anyio's plugin.
+  `test_remote`, `test_tasks`, `test_api`, `test_config`, `test_direct` (real sockets on 127.0.0.1;
+  `hub_tcp` fixture, `direct_to()`). Async tests use anyio's plugin.
 
 ## Rules for changes
 
@@ -56,6 +62,10 @@ explain the reasoning behind non-obvious changes instead of only making them.
   `test_openapi_contract` pins it to exactly the four free control routes.
 - **MQTT: only the topics in `protocol.py`.** Adding one means a PROTOCOL.md row, an
   assumption, a fake-X2 handler and a test.
+- **Direct: only find-remote.** `direct.py` sends `CALL_ME`, `REQ_BANNER` and `FIND_REMOTE_X2`,
+  nothing else: the same protocol edits and erases the hub. It's used only with no server
+  configured (the server holds the hub's one session), only for an X2 banner, one session at a
+  time. The hub doesn't acknowledge the find frame, so don't report it as confirmed.
 - **Ids never cross transports.** Resolve names on the path you'll use (`S-MQTT-IDS`); the tests
   give MQTT a different id space on purpose.
 - **Tell the model what this hub can do.** New features must show up in `_capabilities()`
@@ -99,7 +109,9 @@ First real X2 run 2026-10-16 (MQTT only): login, lists and uppercase-MAC topics 
 never answers `device/<MAC>/keys_request`, so `protocol.DEVICE_KEYS_OVER_MQTT` is False and device
 targets over MQTT are refused up front (`S-MQTT-DEVICE-KEYS`). The same day, control over MQTT from
 Claude (start, power off, buttons, a macro, favorites, the settle window, `<MAC>/up`) was confirmed; a
-burst of unanswered requests wedged the X2 until a power cycle (`S-MQTT-SERIAL` note). The
+burst of unanswered requests wedged the X2 until a power cycle (`S-MQTT-SERIAL` note). On 2026-10-27, find-remote
+directly over the hub's TCP protocol (no server) worked on the same X2: connect-back in 0.13 s across
+subnets, the remote beeped, no reply frame, MQTT unaffected (`S-DIRECT-*`). The
 sofabaton-x-server path and the X1/X1S are simulator-only.
 HARDWARE_VALIDATION.md is the checklist. Captures from
 `doctor --dump` go in `tests/fixtures/recorded/`.
