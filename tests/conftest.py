@@ -59,6 +59,8 @@ def fast(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(MqttHub, "publish_gap", 0.0)
     monkeypatch.setattr(MqttHub, "reply_timeout", 1.0)
     monkeypatch.setattr(MqttHub, "retry_delay", 0.05)
+    monkeypatch.setattr(MqttHub, "abandon_timeout", 0.5)
+    monkeypatch.setattr(MqttHub, "disconnect_timeout", 0.3)
     monkeypatch.setattr(DirectHub, "connect_timeout", 0.6)
     monkeypatch.setattr(DirectHub, "call_me_interval", 0.2)
     monkeypatch.setattr(DirectHub, "banner_timeout", 0.5)

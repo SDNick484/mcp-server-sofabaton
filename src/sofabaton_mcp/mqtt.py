@@ -40,7 +40,7 @@ from typing import Any
 from . import protocol as p
 from .api import Press, PressPage, SofabatonError
 from .config import MqttSettings
-from .tasks import stop_task
+from .tasks import spawn_task, stop_task
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +61,10 @@ class MqttHub:
     auth_retry_delay = 60.0
     ring_size = 200
     stop_timeout = 5.0  # shutdown waits at most this long for the connection task
+    # A connect cut short by stop() is given this long to finish so it can be closed properly, and the
+    # DISCONNECT that closes it this long.
+    abandon_timeout = 5.0
+    disconnect_timeout = 2.0
 
     def __init__(self, settings: MqttSettings, mac: str, client_factory: ClientFactory | None = None) -> None:
         self.settings = settings
@@ -69,6 +73,7 @@ class MqttHub:
         self._factory = client_factory
         self._client: Any = None
         self._task: asyncio.Task[None] | None = None
+        self._abandoned: asyncio.Task[None] | None = None  # closing a connect that stop() interrupted
         self._lock = asyncio.Lock()
         self._waiters: list[_Waiter] = []
         self._state_changed = asyncio.Event()
@@ -101,6 +106,9 @@ class MqttHub:
         # Not cancel-and-await: aiomqtt waits for every acknowledgement with asyncio.wait_for, which on
         # Python 3.11 can drop the cancel (see stop_task and tests/test_mqtt.py's shutdown tests).
         await stop_task(self._task, self.stop_timeout, "The MQTT connection")
+        if self._abandoned is not None:
+            # Not stop_task: cancelling this would defeat it. It ends on its own within abandon_timeout.
+            await asyncio.wait({self._abandoned}, timeout=self.abandon_timeout + self.disconnect_timeout + 1)
 
     def _make_client(self) -> Any:
         import aiomqtt
@@ -130,7 +138,9 @@ class MqttHub:
         delay = self.retry_delay
         while True:
             try:
-                async with self._make_client() as client:
+                async with contextlib.AsyncExitStack() as stack:
+                    client = await self._connect(self._make_client())
+                    stack.push_async_exit(client)  # from here on, leaving disconnects, as `async with` would
                     self._client = client
                     for key in p.SUBSCRIBED:
                         await client.subscribe(self.t[key], qos=0)
@@ -152,6 +162,47 @@ class MqttHub:
                         w.future.set_exception(SofabatonError(f"The MQTT broker at {self.broker} disconnected."))
             await self._backoff(self.auth_retry_delay if self.auth_failed else delay)
             delay = min(delay * 2, 60.0)
+
+    async def _connect(self, client: Any) -> Any:
+        """`await client.__aenter__()`, except that a cancel mid-connect doesn't leave the connection open.
+
+        Why not just `async with client`: when stop() cancels us while aiomqtt is connecting, its __aenter__
+        raises CancelledError without undoing anything, and `async with` never calls __aexit__ for an
+        __aenter__ that didn't finish. The blocking connect runs in an executor thread, which carries on
+        regardless and opens the socket; aiomqtt keeps reading it and pinging the broker. So the broker
+        connection outlived stop(): harmless when the process exits next, but a test broker's wait_closed()
+        (which waits for every connection on Python 3.12+) hung on it.
+
+        So the attempt runs as its own task behind a shield. If we're cancelled, it's left to finish (or time
+        out) in the background and is then disconnected properly; stop() waits for that.
+        """
+        entering = asyncio.ensure_future(client.__aenter__())
+        try:
+            return await asyncio.shield(entering)
+        except asyncio.CancelledError:
+            self._abandoned = spawn_task(self._close_abandoned(client, entering), name="sofabaton-mqtt-abandon")
+            raise
+
+    async def _close_abandoned(self, client: Any, entering: asyncio.Future[Any]) -> None:
+        """Let an interrupted connect settle, then close it.
+
+        The attempt is waited for, not cancelled: cancelling aiomqtt's wait for the CONNACK cancels its
+        `_connected` future, and its disconnect callback then raises inside paho, before paho closes the
+        socket. So: wait (the executor thread is done by then), DISCONNECT, which paho follows by closing the
+        socket, and only then cancel whatever is still waiting.
+        """
+        done, _ = await asyncio.wait({entering}, timeout=self.abandon_timeout)
+        if done and (entering.cancelled() or entering.exception() is not None):
+            return  # refused or failed: aiomqtt has nothing open
+        # Connected, or (a broker that never answers) still waiting for the CONNACK with the socket open.
+        # aiomqtt's __aexit__ waits for a disconnect it only acknowledges on a connection that completed, so
+        # it's given a short timeout; the socket is closed by then either way.
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(client.__aexit__(None, None, None), self.disconnect_timeout)
+        if not entering.done():
+            entering.cancel()
+            await asyncio.wait({entering})
+        log.debug("MQTT: closed a connection attempt that was interrupted by stop()")
 
     async def _read_until_reconnect(self, client: Any) -> None:
         """Dispatch messages until the connection drops (aiomqtt raises) or a reconnect is requested.

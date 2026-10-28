@@ -23,6 +23,12 @@
 
 ### Fixed
 
+- MQTT: stopping while the broker connection was still being made left that connection open (aiomqtt
+  doesn't undo a connect that is cancelled, and `async with` never calls `__aexit__` for it). The process
+  exiting closed it, but anything that waited for the broker's connections hung; Python 3.12+'s
+  `Server.wait_closed()` does, which hung the test broker's shutdown about one run in thirty. `MqttHub`
+  now lets an interrupted connect finish (`abandon_timeout`, 5 s) and disconnects it, and `stop()` waits
+  for that.
 - MQTT: a connection that dropped while idle is brought back before a command is sent, instead of the call
   failing until the next retry (up to a minute later). `MqttHub.ensure_connected()` wakes the reconnect loop
   and waits up to 2 s; a rejected login still fails at once and isn't retried.

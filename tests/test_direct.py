@@ -126,10 +126,9 @@ async def mqtt_only(broker, state, x2):
         c = SofabatonClient(Settings(url=None, hub=None, mqtt=m, hub_ip=hub_ip, **settings), None)
         await c.start()
         made.append(c)
-        # Wait for the broker connection before the test goes on, as test_mqtt's tests do. A test that
-        # finishes first (a dry run never touches MQTT) stops the client mid-connect, and aiomqtt can leave
-        # that half-made connection open; Broker.stop()'s wait_closed() then waits for it forever (seen on
-        # Python 3.12, about one run in thirty).
+        # Wait for the broker connection before the test goes on, as test_mqtt's tests do, so each test
+        # runs against a connected X2. (Stopping mid-connect used to leave the connection open and hang the
+        # broker's shutdown; MqttHub._connect fixes that, and test_mqtt tests it.)
         await eventually(lambda: c.mqtt is not None and c.mqtt.connected)
         return c
 
