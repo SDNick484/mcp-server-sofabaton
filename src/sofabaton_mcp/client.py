@@ -18,7 +18,9 @@ X2's own MQTT announcement, with a list re-read as the fallback.
 
 Capabilities (reported by get_status, so the model knows what this hub can do):
   activities, buttons, commands   list/start/stop, hard buttons, named commands
-  find_remote, hub_info           need sofabaton-x-server
+  find_remote                     sofabaton-x-server in control mode, or, with no server, the
+                                  hub's own TCP protocol (SOFABATON_HUB_IP; X2; direct.py)
+  hub_info                        needs sofabaton-x-server
   presses                         Wifi-Device key presses (server, or MQTT on an X2)
   live_activity_state             X2 + MQTT: changes pushed as they happen
   control_while_app_open          X2 + MQTT: commands work while the app holds the proxy
@@ -39,6 +41,7 @@ from typing_extensions import TypedDict
 from . import protocol as p
 from .api import HubMode, HubStatus, PressPage, RunningActivity, ServerAPI, SofabatonError
 from .config import ALLOWED_BUTTONS, BUTTON_CODES, Settings
+from .direct import DirectHub
 from .limits import (
     ACTIVITY_CAPACITY,
     ACTIVITY_RATE,
@@ -54,7 +57,7 @@ from .tasks import stop_task
 
 log = logging.getLogger(__name__)
 
-Path = Literal["server", "mqtt"]
+Path = Literal["server", "mqtt", "direct"]
 Model = Literal["X1", "X1S", "X2"]
 MQTT_MODELS = ("X2",)  # ASSUMPTION S-X1-NO-MQTT
 
@@ -148,6 +151,8 @@ class SofabatonClient:
         self._mqtt_grace_used = False
         self.press_bucket = TokenBucket(PRESS_CAPACITY, PRESS_RATE)
         self.activity_bucket = TokenBucket(ACTIVITY_CAPACITY, ACTIVITY_RATE)
+        # find_remote without a server. Settings only keep hub_ip when no server is configured.
+        self.direct = DirectHub(settings.hub_ip, settings.direct_port) if settings.hub_ip else None
 
     # --- lifecycle --------------------------------------------------------------------
     async def start(self) -> None:
@@ -379,7 +384,7 @@ class SofabatonClient:
             caps += ["activities", "buttons", "commands"]
         if server_ok or mqtt_ok:
             caps += ["presses"]
-        if server_control:
+        if server_control or self._direct_ok():
             caps += ["find_remote"]
         if server_ok:
             caps += ["hub_info"]
@@ -397,9 +402,15 @@ class SofabatonClient:
             )
         elif (reason := self._mqtt_reason()) and not mqtt_ok:
             limits.append(f"MQTT unavailable: {reason}")
-        if self.api is None:
+        if self.api is None and self.direct is None:
             limits.append(
-                "No sofabaton-x-server: find_remote and firmware details are unavailable (no MQTT topic for them)."
+                "No sofabaton-x-server: find_remote and firmware details are unavailable (no MQTT topic for them). "
+                "On an X2, setting SOFABATON_HUB_IP enables find_remote over the hub's own protocol."
+            )
+        elif self.api is None:
+            limits.append(
+                "No sofabaton-x-server: firmware details are unavailable. find_remote goes to the hub directly, which "
+                "works only while the Sofabaton app is closed, and the hub doesn't confirm it (listen for the beep)."
             )
         elif not server_ok:
             limits.append(f"sofabaton-x-server: {sv.error if sv and sv.error else 'no session with the hub'}")
@@ -803,13 +814,13 @@ class SofabatonClient:
         await self._send_repeated(lambda: mq.publish(key, payload), repeat, gap)
         return Outcome(True, path, sent), opt.label, where
 
+    def _direct_ok(self) -> bool:
+        return self.api is None and self.direct is not None and self.model in (None, "X2")
+
     async def find_remote(self) -> Outcome:
-        sv = await self._server_view()
         if self.api is None:
-            raise SofabatonError(
-                "find_remote needs sofabaton-x-server; this X2 is set up for MQTT only, and none of the documented "
-                "MQTT topics make the remote beep."
-            )
+            return await self._find_remote_direct()
+        sv = await self._server_view()
         if sv is None or not sv.reachable or sv.status is None or sv.status["mode"] != "control":
             raise self._no_path(sv, control=True)
         hub = await self.hub_id()
@@ -818,6 +829,26 @@ class SofabatonClient:
             return Outcome(False, "server", sent, dry_run=True)
         await self.api.find_remote(hub)
         return Outcome(True, "server", sent)
+
+    async def _find_remote_direct(self) -> Outcome:
+        if self.direct is None:
+            raise SofabatonError(
+                "find_remote needs sofabaton-x-server or SOFABATON_HUB_IP: this X2 is set up for MQTT only, and none "
+                "of the documented MQTT topics make the remote beep. Set SOFABATON_HUB_IP to the hub's address to send "
+                "it over the hub's own protocol instead."
+            )
+        if not self._direct_ok():
+            raise SofabatonError(f"Finding the remote directly is only known for the X2; this is an {self.model}.")
+        if self.settings.dry_run:
+            return Outcome(False, "direct", DirectHub.plan(find=True), dry_run=True)
+        self._limit(self.press_bucket, 1, "find the remote")
+        session = await self.direct.find_remote()
+        return Outcome(
+            True,
+            "direct",
+            session.sent,
+            note="The hub doesn't confirm this (ASSUMPTION S-DIRECT-FIND): the remote should be beeping now.",
+        )
 
     async def presses(self, after: int | None, limit: int) -> PressPage:
         sv = await self._server_view()

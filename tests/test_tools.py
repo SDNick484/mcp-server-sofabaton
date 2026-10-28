@@ -115,7 +115,7 @@ async def test_output_schemas_let_the_model_plan(mcp_client):
     assert {"model", "via", "capabilities", "limitations", "running_activity", "transition"} <= set(status["required"])
     action = t["start_activity"].output_schema
     assert action["properties"]["outcome"]["enum"] == ["done", "unchanged", "dry_run"]
-    assert action["properties"]["via"]["enum"] == ["server", "mqtt"]
+    assert action["properties"]["via"]["enum"] == ["server", "mqtt", "direct"]
 
 
 async def test_instructions_say_mqtt_is_x2_only(mcp_client):

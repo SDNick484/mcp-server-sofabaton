@@ -7,6 +7,8 @@ the same ones:
               builds real requests and parses real responses)
   Broker      a small MQTT 3.1.1 broker
   FakeX2      the X2's MQTT side, an MQTT client answering like the hub
+  FakeDirectHub  the hub's own TCP side, as far as find_remote goes: answers
+              CALL_ME by connecting back, like the hub
 They share one FakeHubState, so REST and MQTT see the same hub.
 
 Set MQTT_TEST_BROKER=mqtt://host:port to run the MQTT tests against a real
@@ -24,8 +26,10 @@ from urllib.parse import urlparse
 import pytest
 
 from sofabaton_mcp.client import SofabatonClient
+from sofabaton_mcp.direct import DirectHub
 from sofabaton_mcp.mqtt import MqttHub
 from sofabaton_mcp.sim.broker import Broker
+from sofabaton_mcp.sim.fake_direct import FakeDirectHub
 from sofabaton_mcp.sim.fake_server import FakeServer
 from sofabaton_mcp.sim.fake_x2 import FakeX2
 from sofabaton_mcp.sim.hub_state import FakeHubState, load_state
@@ -55,6 +59,10 @@ def fast(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(MqttHub, "publish_gap", 0.0)
     monkeypatch.setattr(MqttHub, "reply_timeout", 1.0)
     monkeypatch.setattr(MqttHub, "retry_delay", 0.05)
+    monkeypatch.setattr(DirectHub, "connect_timeout", 0.6)
+    monkeypatch.setattr(DirectHub, "call_me_interval", 0.2)
+    monkeypatch.setattr(DirectHub, "banner_timeout", 0.5)
+    monkeypatch.setattr(DirectHub, "linger", 0.05)
 
 
 @pytest.fixture
@@ -71,6 +79,8 @@ def env(monkeypatch):
         "SOFABATON_MQTT_MAC",
         "SOFABATON_DRY_RUN",
         "SOFABATON_MQTT_SETTLE_S",
+        "SOFABATON_HUB_IP",
+        "SOFABATON_DIRECT_PORT",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -125,3 +135,17 @@ async def x2(broker, state):
     await fake.start()
     yield fake
     await fake.stop()
+
+
+@pytest.fixture
+async def hub_tcp(state):
+    """The hub's own TCP side on 127.0.0.1 (a random UDP port instead of 8102)."""
+    fake = FakeDirectHub(state)
+    await fake.start()
+    yield fake
+    await fake.stop()
+
+
+def direct_to(fake: FakeDirectHub) -> DirectHub:
+    """A DirectHub aimed at the fake: listens on any free port, sends CALL_ME to the fake's UDP port."""
+    return DirectHub("127.0.0.1", 0, hub_udp_port=fake.port)

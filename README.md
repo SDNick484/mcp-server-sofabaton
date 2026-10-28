@@ -41,6 +41,11 @@ over MQTT, so device commands over MQTT are refused up front with what would ena
 publishing state but answering nothing until it was power-cycled; nothing in the server sends
 requests like that.
 
+**Seen working on that X2 (2026-10-27):** finding the remote with no server, directly over the
+hub's own protocol (`SOFABATON_HUB_IP`). The hub connected back in 0.13 s across subnets, the remote
+beeped, and the X2's MQTT link carried on. The hub doesn't acknowledge it, so the beep is the only
+confirmation.
+
 **Not tested on hardware yet:** the X1 and X1S, sofabaton-x-server with any hub, an X2 on both
 paths at once, more than one hub, brokers other than Mosquitto, and other firmware. Each detail
 the code relies on is a named assumption with its source and status in
@@ -53,7 +58,8 @@ checklist for confirming them on your hub.
 | ------------------------------------------------ | ---------------- | --------------- | --------------------------- | ---------------- |
 | Activities, buttons, macros, favorites           | yes              | yes             | yes                         | yes              |
 | A device's own commands                          | yes              | yes             | yes (not while the app is open) | no: the X2 doesn't list them over MQTT |
-| Find the remote; model and firmware              | yes              | yes             | yes                         | no               |
+| Find the remote                                  | yes              | yes             | yes                         | yes, with `SOFABATON_HUB_IP` (not while the app is open; unconfirmed: listen for it) |
+| Model and firmware                               | yes              | yes             | yes                         | no               |
 | Presses of buttons bound to a Wifi Device        | yes (HTTP)       | yes             | yes                         | yes (MQTT)       |
 | Live activity state (pushed by the hub)          | no               | no              | yes                         | yes              |
 | Control while the Sofabaton app is open          | no               | no              | yes: falls back to MQTT     | yes              |
@@ -82,6 +88,9 @@ Claude ──► mcp-server-sofabaton ──┬──► sofabaton-x-server ─�
   app (Me → Connect to Home Assistant). It answers list requests and takes commands on topics
   under its MAC, and it announces every activity change. This doesn't go through the proxy, so
   it keeps working while the app holds it.
+- **Directly, for one thing (X2, no server).** Finding the remote has no MQTT topic, so with
+  `SOFABATON_HUB_IP` set and no server, `find_remote` opens a short session on the hub's own
+  protocol, sends the one frame, and hangs up. Nothing else goes that way.
 
 With both configured, each call uses the server when it's in control mode and MQTT otherwise.
 Names are resolved on whichever path is used, so ids never cross from one to the other.
@@ -123,6 +132,8 @@ client's config):
 | `SOFABATON_MQTT_PASSWORD_FILE`  |                         | Read the password from a file (wins over the others)                           |
 | `SOFABATON_MQTT_MAC`            | *(from the server)*     | The X2's MAC. Needed for MQTT only; with a server it's learned                |
 | `SOFABATON_MQTT_SETTLE_S`       | `6`                     | After an activity change over MQTT, hold presses off this long                  |
+| `SOFABATON_HUB_IP`              | *(off)*                 | MQTT only, X2: the hub's IPv4 address, so `find_remote` works without a server  |
+| `SOFABATON_DIRECT_PORT`         | `8200`                  | TCP port the hub connects back to for that. Must be free and reachable from the hub |
 | `SOFABATON_DRY_RUN`             | off                     | Read the hub, send nothing that changes anything (`serve --dry-run` too)        |
 | `SOFABATON_LOG_UNREDACTED`      | off                     | Don't mask IPs and MACs in logs (`--no-redact`); passwords and other secrets stay masked |
 
@@ -144,7 +155,19 @@ SOFABATON_MQTT_PASSWORD_FILE=/etc/mcp/sofabaton-mqtt.pw
 SOFABATON_URL=none
 SOFABATON_MQTT_URL=mqtt://sofabaton:secret@192.168.1.10:1883
 SOFABATON_MQTT_MAC=02:AB:34:CD:56:EF
+SOFABATON_HUB_IP=192.168.1.25        # optional: find_remote without a server
 ```
+
+**Finding the remote without a server.** No MQTT topic makes the remote beep, but the hub's own
+TCP protocol (the one the Sofabaton app speaks) does. With `SOFABATON_HUB_IP` set and no
+`SOFABATON_URL`, `find_remote` sends the hub a `CALL_ME` on UDP 8102, the hub connects back to
+this machine on TCP `SOFABATON_DIRECT_PORT`, and one find-remote frame goes over that session,
+nothing else. Three things follow from how the hub works. It serves one client at a time, so
+this works only while the Sofabaton app is closed (otherwise the hub doesn't connect back and the
+tool says so). The hub must be able to reach this machine on that port. And the hub doesn't
+acknowledge the frame, so the result says *sent*, and the beep is the confirmation. `doctor`
+checks the session without the find-remote frame, so it stays quiet. `SOFABATON_HUB_IP` is
+ignored when a server is configured: the server holds the hub's session and finds the remote itself.
 
 ## First contact
 
@@ -241,7 +264,7 @@ service under OpenRC, and an MCP call over HTTP reaching a simulated X2 on both 
 | `power_off`          | Power off the running activity and confirm                                                      |
 | `press_button`       | A remote hard button (`VOL_UP`, `PAUSE`, `OK`, ...) 1-10 times, through the running activity    |
 | `send_command`       | A macro, favorite or device command by name, 1-10 times                                         |
-| `find_remote`        | Make the remote beep (needs the server)                                                         |
+| `find_remote`        | Make the remote beep (the server, or on an X2 with `SOFABATON_HUB_IP` the hub directly)          |
 | `get_recent_presses` | Presses of remote buttons bound to a Wifi Device: the remote as an input to the agent          |
 
 Actions return `{outcome: done | unchanged | dry_run, detail, via, sent}`. `sent` lists the
@@ -405,6 +428,11 @@ hub; the rest are verified against the simulator only (details and sources in [P
 | `S-MQTT-SERIAL`        | medium     | simulator-only |
 | `S-MQTT-REPLY-TIMEOUT` | low        | hardware-verified |
 | `S-MQTT-SETTLE`        | low        | hardware-verified |
+| `S-DIRECT-CALL-ME`     | high       | hardware-verified |
+| `S-DIRECT-BANNER`      | high       | hardware-verified |
+| `S-DIRECT-FIND`        | high       | hardware-verified |
+| `S-DIRECT-LINGER`      | low        | simulator-only |
+| `S-DIRECT-EXCLUSIVE`   | medium     | simulator-only |
 
 `test_assumptions.py` fails if this table and `assumptions.py` disagree.
 

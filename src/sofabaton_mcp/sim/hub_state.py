@@ -46,7 +46,7 @@ class FakeDevice:
 class Executed:
     """Something the fake hub did, whichever way it was asked."""
 
-    via: Literal["rest", "mqtt"]
+    via: Literal["rest", "mqtt", "direct"]
     what: str  # "start", "stop", "key", "macro", "favorite", "device_key", "find_remote"
     entity_id: int  # REST ids, always (MQTT ids are translated back)
     command_id: int | None = None

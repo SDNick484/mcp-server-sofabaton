@@ -5,6 +5,9 @@
            model/MAC/firmware, catalog readable
   mqtt     (if configured; X2 only) broker login, the X2 answering an activity
            list request on its MAC's topics, live state known
+  direct   (if SOFABATON_HUB_IP is set) a session over the hub's own TCP protocol:
+           CALL_ME, the hub's connect-back, its banner. No find-remote frame, so
+           the remote stays quiet
   listen   (--listen N) print every message under activity/#, device/# and +/up
            for N seconds: press keys on the remote and watch what the X2 sends
 
@@ -34,6 +37,7 @@ from .api import ServerAPI, SofabatonError
 from .assumptions import ASSUMPTIONS, contradicted, unverified
 from .client import SofabatonClient
 from .config import Settings
+from .direct import DirectHub
 from .logsafe import redact
 from .mqtt import ClientFactory, MqttHub
 from .protocol import DEVICE_KEYS_OVER_MQTT, normalize_mac
@@ -269,6 +273,23 @@ async def listen(settings: Settings, seconds: float, factory: ClientFactory | No
     return heard
 
 
+async def _direct_check(direct: DirectHub, report: Report) -> None:
+    """Connect and read the banner, without the find-remote frame: proves find_remote's path, silently."""
+    try:
+        session = await direct.identify()
+    except SofabatonError as exc:
+        report.checks.append(Check("direct", False, "the hub didn't complete a direct session", str(exc)))
+        return
+    report.checks.append(
+        Check(
+            "direct",
+            True,
+            f"{session.model} connected back in {session.connect_s:.2f}s and sent its banner: find_remote will work "
+            "directly (while the Sofabaton app is closed)",
+        )
+    )
+
+
 async def run_doctor(
     settings: Settings,
     *,
@@ -277,6 +298,7 @@ async def run_doctor(
     listen_s: float = 0.0,
     api: ServerAPI | None = None,
     mqtt_factory: ClientFactory | None = None,
+    direct: DirectHub | None = None,
 ) -> Report:
     report = Report(versions(), list(settings.problems))
     report.unverified_assumptions = [a.id for a in unverified()]
@@ -309,6 +331,8 @@ async def run_doctor(
             await _mqtt_checks(settings, mac, report, dump, timeout, mqtt_factory)
         if listen_s and model not in ("X1", "X1S"):
             report.heard = await listen(settings, listen_s, mqtt_factory)
+    if settings.hub_ip:
+        await _direct_check(direct or DirectHub(settings.hub_ip, settings.direct_port), report)
     if not settings.url and settings.mqtt is None:
         report.warnings.append("Nothing configured: set SOFABATON_URL and/or SOFABATON_MQTT_URL.")
     if dump_dir is not None and dump:
