@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-27
+
 ### Added
 
 - `find_remote` without sofabaton-x-server (X2, MQTT-only setups): with `SOFABATON_HUB_IP` set, it opens a
@@ -13,11 +15,6 @@
   find-remote frame, so it stays quiet. New assumptions `S-DIRECT-CALL-ME`, `S-DIRECT-BANNER`,
   `S-DIRECT-FIND` (hardware-verified), `S-DIRECT-LINGER` and `S-DIRECT-EXCLUSIVE`; HARDWARE_VALIDATION.md
   step 8a. `SOFABATON_HUB_IP` is ignored, with a config problem, when a server is configured.
-
-## [0.3.0] - 2026-10-27
-
-### Added
-
 - `serve --http`: `/healthz` reports whether the hub is reachable (200 with the hub name and path, `server`
   or `mqtt`) or not (503), instead of always 200 while the process is up. It reads the current state only:
   it never waits for MQTT or triggers a reconnect. The container smoke test checks it.
