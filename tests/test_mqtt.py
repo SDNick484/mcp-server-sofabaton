@@ -564,3 +564,86 @@ async def test_stop_is_bounded_even_if_the_task_never_exits(monkeypatch, caplog)
     assert "didn't stop within" in caplog.text
     client.swallow_all = False  # let the test's loop close cleanly
     await hub.stop()
+
+
+# --- stopped mid-connect -----------------------------------------------------------------------------
+class SilentBroker:
+    """Accepts TCP connections and never answers, so a client stays stuck waiting for its CONNACK.
+
+    Records whether each connection was closed by the client: what stop() must guarantee.
+    """
+
+    def __init__(self) -> None:
+        self.opened = 0
+        self.closed = 0
+        self._server: asyncio.Server | None = None
+
+    async def start(self) -> int:
+        self._server = await asyncio.start_server(self._conn, "127.0.0.1", 0)
+        return int(self._server.sockets[0].getsockname()[1])
+
+    async def _conn(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self.opened += 1
+        try:
+            while await reader.read(1024):  # the CONNECT arrives; we sit on it
+                pass
+        except ConnectionError:
+            pass
+        self.closed += 1
+        writer.close()
+
+    async def stop(self) -> None:
+        assert self._server is not None
+        self._server.close()
+
+
+def _slow_connect_factory(seconds: float):  # noqa: ANN202
+    """aiomqtt.Client whose blocking connect (run in an executor thread) starts late.
+
+    Lets a test cancel while that thread is still running: the thread finishes anyway and opens the
+    socket after the cancel. It overrides aiomqtt's private _client_connect, the one way to get there.
+    """
+    import time
+
+    import aiomqtt
+
+    class SlowConnect(aiomqtt.Client):
+        def _client_connect(self) -> None:
+            time.sleep(seconds)
+            super()._client_connect()
+
+    return SlowConnect
+
+
+@pytest.mark.parametrize("where", ["waiting for CONNACK", "in the connect thread"])
+async def test_stop_mid_connect_closes_the_half_made_connection(where):
+    """aiomqtt doesn't undo a connection when __aenter__ is cancelled, and `async with` never calls
+    __aexit__ when __aenter__ fails, so the socket stayed open (and on Python 3.12+ a broker's
+    wait_closed() then waited for it forever). stop() must leave nothing connected."""
+    broker = SilentBroker()
+    port = await broker.start()
+    factory = _slow_connect_factory(0.3) if where == "in the connect thread" else None
+    hub = MqttHub(MqttSettings("127.0.0.1", port, False, None, None, None), "02AB34CD56EF", factory)
+    await hub.start()
+    await asyncio.sleep(0.1)  # mid-connect: the thread is sleeping, or CONNECT is sent and unanswered
+    await hub.stop()
+    try:
+        await eventually(lambda: broker.opened == 1 and broker.closed == 1, timeout=3)
+        await asyncio.sleep(0.5)  # and no later attempt reconnects
+        assert broker.opened == 1
+    finally:
+        await broker.stop()
+
+
+async def test_a_broker_can_shut_down_after_a_client_stopped_mid_connect(broker):
+    """The symptom that found this: Broker.stop() waits for every connection on Python 3.12+, and hung
+    forever on the half-made one (test_direct's dry-run test, about one run in thirty on 3.12)."""
+    b = in_package(broker)
+    for _ in range(5):  # the timing varies: stop at a few points of the connect
+        hub = MqttHub(MqttSettings(broker[0], broker[1], False, None, None, None), "02AB34CD56EF")
+        await hub.start()
+        await asyncio.sleep(0)
+        await hub.stop()
+    stopping = asyncio.create_task(b.stop())
+    done, _ = await asyncio.wait({stopping}, timeout=3)
+    assert stopping in done, "Broker.stop() hung on a connection stop() left open"
