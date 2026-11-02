@@ -191,7 +191,7 @@ async def test_a_burst_that_fails_on_the_first_press_keeps_the_original_error(ma
 
 async def test_unknown_command_and_button_send_nothing(make, fake):
     c = make()
-    with pytest.raises(SofabatonError, match="has no command 'Erase'"):
+    with pytest.raises(SofabatonError, match="has no 'Erase'"):
         await c.send_command("Erase", "Onkyo Receiver")
     with pytest.raises(SofabatonError, match="not allowed"):
         await c.press("POWER_OFF", "Onkyo Receiver")

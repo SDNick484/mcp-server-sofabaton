@@ -51,7 +51,7 @@ async def test_healthz_is_503_when_the_hub_cant_be_reached(rest_client, fake, br
     else:
         fake.hub_connected = False  # the server is up but has no session with the hub
     resp = await healthz(rest_client.health_check)
-    assert (resp.status_code, resp.json()) == (503, {"status": "degraded", "error": "Hub unreachable"})
+    assert (resp.status_code, resp.json()) == (503, {"status": "degraded", "error": "health check failed"})
 
 
 async def test_healthz_stays_200_in_observe_mode(rest_client, fake):
@@ -99,7 +99,7 @@ async def test_the_failure_says_nothing_an_unauthenticated_caller_shouldnt_see(r
 async def test_server_health_check_before_the_lifespan_is_503(monkeypatch):
     monkeypatch.setattr(server, "_client", None)
     resp = await healthz(server.health_check)
-    assert (resp.status_code, resp.json()) == (503, {"status": "degraded", "error": "Server not started"})
+    assert (resp.status_code, resp.json()) == (503, {"status": "degraded", "error": "health check failed"})
 
 
 async def test_server_health_check_delegates_to_the_running_client(rest_client, monkeypatch):
@@ -117,3 +117,36 @@ def test_serve_http_passes_the_health_check(monkeypatch):
     monkeypatch.setattr(cli, "_setup_logging", lambda *a, **k: None)
     cli.main(["serve", "--http"])
     assert seen["app"] is mcp and seen["health_check"] is server.health_check
+
+
+async def test_call_tools_lists_namespaced_tools(capsys):
+    import argparse
+
+    ret = await cli._cmd_call(argparse.Namespace(tool="tools", args=[]))
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "sofabaton_get_status" in out
+    assert "sofabaton_start_activity" in out
+
+
+async def test_call_shorthand_and_full_name(env, fake, monkeypatch, capsys):
+    import argparse
+
+    monkeypatch.setattr(server, "ServerAPI", lambda url: ServerAPI(url, transport=fake.transport))
+    # Unprefixed shorthand 'get_status'
+    ret = await cli._cmd_call(argparse.Namespace(tool="get_status", args=[]))
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "model" in out
+
+    # Unprefixed shorthand 'status'
+    ret = await cli._cmd_call(argparse.Namespace(tool="status", args=[]))
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "model" in out
+
+    # Full prefixed name
+    ret = await cli._cmd_call(argparse.Namespace(tool="sofabaton_get_status", args=[]))
+    assert ret == 0
+    out = capsys.readouterr().out
+    assert "model" in out

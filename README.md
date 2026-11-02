@@ -66,7 +66,7 @@ checklist for confirming them on your hub.
 | Needs                                            | server           | server          | server + broker             | broker + the MAC |
 
 **MQTT is X2-only.** The X1 and X1S have no MQTT; on those models, the server is the only way in
-and everything in the first three rows works through it. `get_status` reports this as
+and everything in the first three rows works through it. `sofabaton_get_status` reports this as
 `model`, `capabilities` and `limitations`, so the model can plan around it. For example, on an
 X1S it says *"This is an X1S: live activity state, control while the Sofabaton app is open,
 and MQTT presses need an X2."*
@@ -89,7 +89,7 @@ Claude ──► mcp-server-sofabaton ──┬──► sofabaton-x-server ─�
   under its MAC, and it announces every activity change. This doesn't go through the proxy, so
   it keeps working while the app holds it.
 - **Directly, for one thing (X2, no server).** Finding the remote has no MQTT topic, so with
-  `SOFABATON_HUB_IP` set and no server, `find_remote` opens a short session on the hub's own
+  `SOFABATON_HUB_IP` set and no server, `sofabaton_find_remote` opens a short session on the hub's own
   protocol, sends the one frame, and hangs up. Nothing else goes that way.
 
 With both configured, each call uses the server when it's in control mode and MQTT otherwise.
@@ -160,7 +160,7 @@ SOFABATON_HUB_IP=192.168.1.25        # optional: find_remote without a server
 
 **Finding the remote without a server.** No MQTT topic makes the remote beep, but the hub's own
 TCP protocol (the one the Sofabaton app speaks) does. With `SOFABATON_HUB_IP` set and no
-`SOFABATON_URL`, `find_remote` sends the hub a `CALL_ME` on UDP 8102, the hub connects back to
+`SOFABATON_URL`, `sofabaton_find_remote` sends the hub a `CALL_ME` on UDP 8102, the hub connects back to
 this machine on TCP `SOFABATON_DIRECT_PORT`, and one find-remote frame goes over that session,
 nothing else. Three things follow from how the hub works. It serves one client at a time, so
 this works only while the Sofabaton app is closed (otherwise the hub doesn't connect back and the
@@ -174,7 +174,7 @@ ignored when a server is configured: the server holds the hub's session and find
 ```sh
 mcp-server-sofabaton doctor     # each layer, with a hint for whatever fails
 mcp-server-sofabaton check      # the model, the path, capabilities, and the names the model will use
-mcp-server-sofabaton call start_activity activity="Watch Shield"    # one tool, as the model calls it
+mcp-server-sofabaton call sofabaton_start_activity activity="Watch Shield"    # one tool, as the model calls it (or shorthand 'call start_activity')
 ```
 
 `doctor` checks the server (reachable, version, claimed, hub session, mode, identity,
@@ -226,8 +226,8 @@ even with `--bind 0.0.0.0`: for LAN clients, also pass `--public-host <this mach
 
 `GET /healthz` needs no JWT, so a local monitor (Uptime Kuma, a Proxmox hook) can poll it. It answers
 200 `{"status": "ok", "hub": "Living Room X2", "via": "server"}` (or `"via": "mqtt"`) while the hub is
-reachable on either path, and 503 `{"status": "degraded", "error": "Hub unreachable"}` when it isn't.
-The 503 body gives no reason, since it's unauthenticated; `get_status` or `doctor` say why.
+reachable on either path, and 503 `{"status": "degraded", "error": "health check failed"}` when it isn't.
+The 503 body gives no reason, since it's unauthenticated; `sofabaton_get_status` or `doctor` say why.
 
 ### As an OpenRC service on Alpine (e.g. a Proxmox LXC)
 
@@ -254,18 +254,18 @@ service under OpenRC, and an MCP call over HTTP reaching a simulated X2 on both 
 
 ## Tools
 
-| Tool                 | What it does                                                                                    |
-| -------------------- | ----------------------------------------------------------------------------------------------- |
-| `get_status`         | Start here: model, running activity, `via` (server or MQTT), `capabilities`, `limitations`, `transition` |
-| `list_activities`    | Activities, marking the running one                                                             |
-| `list_devices`       | Devices (brand and class over the server; names only over MQTT)                                 |
-| `list_commands`      | Named commands for an activity (macros, favorites) or a device (default: the running activity)  |
-| `start_activity`     | Start an activity and wait for the hub to confirm; `unchanged` if it's already running          |
-| `power_off`          | Power off the running activity and confirm                                                      |
-| `press_button`       | A remote hard button (`VOL_UP`, `PAUSE`, `OK`, ...) 1-10 times, through the running activity    |
-| `send_command`       | A macro, favorite or device command by name, 1-10 times                                         |
-| `find_remote`        | Make the remote beep (the server, or on an X2 with `SOFABATON_HUB_IP` the hub directly)          |
-| `get_recent_presses` | Presses of remote buttons bound to a Wifi Device: the remote as an input to the agent          |
+| Tool                         | What it does                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------- |
+| `sofabaton_get_status`         | Start here: model, running activity, `via` (server or MQTT), `capabilities`, `limitations`, `transition` |
+| `sofabaton_list_activities`    | Activities, marking the running one                                                             |
+| `sofabaton_list_devices`       | Devices (brand and class over the server; names only over MQTT)                                 |
+| `sofabaton_list_commands`      | Named commands for an activity (macros, favorites) or a device (default: the running activity)  |
+| `sofabaton_start_activity`     | Start an activity and wait for the hub to confirm; `unchanged` if it's already running          |
+| `sofabaton_power_off`          | Power off the running activity and confirm                                                      |
+| `sofabaton_press_button`       | A remote hard button (`VOL_UP`, `PAUSE`, `OK`, ...) 1-10 times, through the running activity    |
+| `sofabaton_send_command`       | A macro, favorite or device command by name, 1-10 times                                         |
+| `sofabaton_find_remote`        | Make the remote beep (the server, or on an X2 with `SOFABATON_HUB_IP` the hub directly)          |
+| `sofabaton_get_recent_presses` | Presses of remote buttons bound to a Wifi Device: the remote as an input to the agent          |
 
 Actions return `{outcome: done | unchanged | dry_run, detail, via, sent}`. `sent` lists the
 exact requests or publishes, with the MAC shown as `<MAC>`. When something can't work on this
@@ -277,32 +277,32 @@ An X2 with both paths. Someone opens the Sofabaton app partway through, and the 
 switches to MQTT. (Output from `simulate`, trimmed.)
 
 ```
-> get_status
+> sofabaton_get_status
   {"model": "X2", "via": "server", "running_activity": null, "transition": null,
    "capabilities": ["catalog", "activities", "buttons", "commands", "presses", "find_remote",
                     "hub_info", "live_activity_state", "control_while_app_open"],
    "limitations": [], ...}
 
-> start_activity {"activity": "Watch Shield"}
+> sofabaton_start_activity {"activity": "Watch Shield"}
   {"outcome": "done", "detail": "Start Watch Shield", "via": "server",
    "sent": ["POST /api/v1/hubs/a1b2c3/activities/101/start"]}
 
-> press_button {"button": "VOL_UP", "repeat": 3}
+> sofabaton_press_button {"button": "VOL_UP", "repeat": 3}
   {"outcome": "done", "detail": "Press VOL_UP x3 on activity Watch Shield", "via": "server", ...}
 
 # (someone opens the Sofabaton app: sofabaton-x-server goes to observe mode)
 
-> start_activity {"activity": "Listen to Music"}
+> sofabaton_start_activity {"activity": "Listen to Music"}
   {"outcome": "done", "via": "mqtt",
    "detail": "Start Listen to Music. The X2 announced it early; its power macro may run for a
               few more seconds (presses wait 6s).",
    "sent": ["publish activity/<MAC>/activity_control_down {\"data\": {\"activity_id\": 102, \"state\": \"on\"}}"]}
 
-> send_command {"command": "Input HDMI 2", "target": "Onkyo Receiver"}
+> sofabaton_send_command {"command": "Input HDMI 2", "target": "Onkyo Receiver"}
   ERROR: The X2 just changed activity and its power macro may still be running; a press now
   could interrupt it. Try again in 5s (SOFABATON_MQTT_SETTLE_S sets this window).
 
-> get_status
+> sofabaton_get_status
   {"model": "X2", "via": "mqtt", "running_activity": "Listen to Music",
    "transition": "power macro may still be running (presses wait 5s more)",
    "capabilities": ["catalog", "activities", "buttons", "commands", "presses", "hub_info",
@@ -319,7 +319,7 @@ an X2.
 A "Wifi Device" on the hub is a virtual device whose commands do nothing but report the press.
 On the X2 it can report to `<MAC>/up` on your broker, and on any model it can report over HTTP
 to sofabaton-x-server. Bind one to a key (say, a long press of a color button) and
-`get_recent_presses` sees it. A remote button can then mean "ask the assistant" or "run my
+`sofabaton_get_recent_presses` sees it. A remote button can then mean "ask the assistant" or "run my
 bedtime routine" to an agent that watches for it. Wifi Devices are set up in the Sofabaton app
 or the server's control panel: that's editing the hub, which this server doesn't do.
 
@@ -347,6 +347,9 @@ or the server's control panel: that's editing the hub, which this server doesn't
 - **Logs are redacted**: IP addresses and MACs (unless `--no-redact`), and always secrets (passwords
   in URLs, JWTs, bearer tokens, keys). They go to stderr; stdout is the
   MCP transport.
+- **Network topology masking**: Structured tool payloads returned over stdout (`sofabaton_get_status`)
+  sanitize internal LAN IPv4 addresses, URLs, and broker endpoints (`x.x.x.<octet>`, `http://x.x.x.<octet>:<port>`),
+  preventing LAN topology leakage to the LLM context while preserving loopback (`127.0.0.1`) and hostnames.
 - Every tool has a title and explicit MCP annotations. Nothing is destructive.
 
 ## Troubleshooting
