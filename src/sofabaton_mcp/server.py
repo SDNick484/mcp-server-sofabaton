@@ -71,12 +71,13 @@ async def lifespan(_server: MCPServer) -> AsyncIterator[None]:
 mcp = MCPServer(
     "sofabaton",
     instructions=(
-        "Controls a Sofabaton universal remote hub (X1, X1S or X2). Call sofabaton_get_status first: it gives the hub's model, "
-        "the running activity, and `capabilities` and `limitations` for this hub, so you know what will work. "
-        "Prefer activities: sofabaton_start_activity powers the right devices; sofabaton_power_off turns the running activity off. "
-        "sofabaton_press_button sends a remote button (VOL_UP, PAUSE, ...) through the running activity; sofabaton_send_command sends a "
-        "named macro, favorite or device command. MQTT features (live activity state, control while the Sofabaton "
-        "app is open) exist only on the X2; on an X1/X1S, close the Sofabaton app if commands are refused."
+        "Controls a Sofabaton universal remote hub (X1, X1S or X2). Call sofabaton_get_status first: it gives "
+        "the hub's model, the running activity, and `capabilities` and `limitations` for this hub, so you know "
+        "what will work. Prefer activities: sofabaton_start_activity powers the right devices; "
+        "sofabaton_power_off turns the running activity off. sofabaton_press_button sends a remote button "
+        "(VOL_UP, PAUSE, ...) through the running activity; sofabaton_send_command sends a named macro, "
+        "favorite or device command. MQTT features (live activity state, control while the Sofabaton app is "
+        "open) exist only on the X2; on an X1/X1S, close the Sofabaton app if commands are refused."
     ),
     lifespan=lifespan,
 )
@@ -206,12 +207,17 @@ async def sofabaton_press_button(
 
 @mcp.tool(title="Send a named command", annotations=_ACT)
 async def sofabaton_send_command(
-    command: Annotated[str, Field(description="A label from sofabaton_list_commands, e.g. 'Netflix' or 'Input HDMI 2'.")],
+    command: Annotated[
+        str, Field(description="A label from sofabaton_list_commands, e.g. 'Netflix' or 'Input HDMI 2'.")
+    ],
     target: Target = None,
     repeat: Repeat = 1,
     delay_ms: DelayMs = None,
 ) -> ActionResult:
-    """Send a named command: an activity macro or favorite, or a device command. Names come from sofabaton_list_commands."""
+    """Send a named command: an activity macro or favorite, or a device command.
+
+    Names come from sofabaton_list_commands.
+    """
     outcome, label, where = await client().send_command(command, target, repeat, delay_ms)
     return _result(outcome, f"send {label} x{repeat} via {where}", "")
 

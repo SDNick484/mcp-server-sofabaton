@@ -12,6 +12,7 @@ or limitation that says why and what would fix it.
 from __future__ import annotations
 
 import asyncio
+
 import pytest
 from mcp import Client
 

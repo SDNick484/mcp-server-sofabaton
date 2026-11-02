@@ -81,7 +81,7 @@ STEP='file modes'
 [ "$(stat -c '%a %U' /var/lib/mcp-server-sofabaton)" = "700 mcp-sofabaton" ]
 
 STEP='mcp over http'
-# A real MCP session against the service: initialize, then get_status, which
+# A real MCP session against the service: initialize, then sofabaton_get_status, which
 # must show the X2 on the server path with the broker connected (structuredContent
 # is compact JSON, so the patterns have no spaces).
 URL=http://127.0.0.1:8714/sofabaton/mcp
@@ -95,7 +95,7 @@ curl -fsS $H -H "mcp-session-id: $SID" "$URL" -d '{"jsonrpc":"2.0","method":"not
 ok=no
 for _ in $(seq 30); do
 	# shellcheck disable=SC2086
-	out=$(curl -fsS $H -H "mcp-session-id: $SID" "$URL" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_status","arguments":{}}}')
+	out=$(curl -fsS $H -H "mcp-session-id: $SID" "$URL" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"sofabaton_get_status","arguments":{}}}')
 	if echo "$out" | grep -q '"model":"X2"' && echo "$out" | grep -q '"via":"server"' && echo "$out" | grep -q '"connected":true'; then
 		ok=yes
 		break
