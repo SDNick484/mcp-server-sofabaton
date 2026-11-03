@@ -28,7 +28,7 @@ async def test_serve_over_stdio():
     env.pop("SOFABATON_HUB", None)
     async with Client(StdioServerParameters(command=exe, args=[], env=env)) as c:
         assert {t.name for t in (await c.list_tools()).tools} == TOOL_NAMES
-        result = await c.call_tool("get_status", {})
+        result = await c.call_tool("sofabaton_get_status", {})
         assert not result.is_error
         st = result.structured_content
         assert st["via"] is None and st["server"]["reachable"] is False

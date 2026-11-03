@@ -173,7 +173,7 @@ async def test_through_the_mcp_tool(env, monkeypatch, broker, state, x2, hub_tcp
     monkeypatch.setenv("SOFABATON_HUB_IP", "127.0.0.1")
     async with Client(server.mcp) as c:
         server.client().direct = direct_to(hub_tcp)
-        result = await c.call_tool("find_remote", {})
+        result = await c.call_tool("sofabaton_find_remote", {})
         r = json.loads(result.content[0].text)
         assert (r["outcome"], r["via"]) == ("done", "direct")
         assert "beeping" in r["detail"]

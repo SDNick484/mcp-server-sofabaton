@@ -51,6 +51,8 @@ from .limits import (
     PRESS_CAPACITY,
     PRESS_RATE,
 )
+from .logsafe import mask_host_port, mask_url
+from .lookup import unknown_with_suggestions
 from .mqtt import ClientFactory, MqttHub
 from .ratelimit import TokenBucket, refusal
 from .tasks import stop_task
@@ -440,7 +442,7 @@ class SofabatonClient:
         server: ServerState | None = None
         if self.api is not None:
             server = {
-                "url": self.settings.url or "",
+                "url": mask_url(self.settings.url or ""),
                 "hub_id": self._hub_id,
                 "reachable": bool(sv and sv.reachable),
                 "hub_connected": bool(st and st["hub_connected"]),
@@ -451,8 +453,9 @@ class SofabatonClient:
         mqtt: MqttState | None = None
         if self.settings.mqtt is not None:
             m = self.mqtt
+            broker_str = m.broker if m else f"{self.settings.mqtt.host}:{self.settings.mqtt.port}"
             mqtt = {
-                "broker": m.broker if m else f"{self.settings.mqtt.host}:{self.settings.mqtt.port}",
+                "broker": mask_host_port(broker_str),
                 "connected": bool(m and m.connected),
                 "login_rejected": bool(m and m.auth_failed),
                 "error": self.mqtt_blocked or (m.last_error if m else None),
@@ -786,7 +789,14 @@ class SofabatonClient:
         options = await self._options(path, kind, eid)
         opt = next((o for o in options if _norm(o.label) == _norm(label)), None)
         if opt is None:
-            raise SofabatonError(f"{where} has no command {label!r}. Use list_commands to see what it accepts.")
+            raise SofabatonError(
+                unknown_with_suggestions(
+                    where,
+                    label,
+                    [o.label for o in options],
+                    fallback="Use list_commands to see what it accepts.",
+                )
+            )
         self._check_settle(path)
         self._limit(self.press_bucket, repeat, f"send {opt.label} x{repeat}")
         if path == "server":

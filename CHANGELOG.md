@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **Tool Namespacing:** All 10 MCP tools are now prefixed with `sofabaton_` (`sofabaton_get_status`, `sofabaton_list_activities`, `sofabaton_list_devices`, `sofabaton_list_commands`, `sofabaton_start_activity`, `sofabaton_power_off`, `sofabaton_press_button`, `sofabaton_send_command`, `sofabaton_find_remote`, `sofabaton_get_recent_presses`) to avoid naming collisions in MCP clients when run alongside sibling smart home servers.
+- **CLI Shorthand:** The `call` CLI subcommand accepts both prefixed (`sofabaton_get_status`) and legacy/shorthand names (`get_status`, `status`).
+
+### Security
+
+- **Network Topology Masking:** Internal LAN endpoints in `sofabaton_get_status` payloads are sanitized: `server["url"]` via `mask_url` and `mqtt["broker"]` via `mask_host_port` (e.g. `http://192.168.1.50:8480` -> `http://x.x.x.50:8480`, `192.168.1.100:1883` -> `x.x.x.100:1883`) to prevent leaking internal network topology to LLM context over stdout while preserving loopback and hostnames.
+
 ## [0.3.0] - 2026-10-27
 
 ### Added
