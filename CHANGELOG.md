@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- `initialize` reports the package version as `serverInfo.version` (it was empty), so a bug report says which build answered.
+- `scripts/smoke_stdio.py`: launches an installed server over stdio as an MCP client does and checks the first exchange. CI's new `wheel-smoke` job runs it against the built wheel on Linux, macOS and Windows; the release workflow runs it before publishing.
+
+### Documentation
+
+- README: a Claude Desktop config using `uvx`, and a note that each client runs its own copy of the server (two copies against one X2 are untested; the HTTP service shares one).
+
 ## [0.4.0] - 2026-11-10
 
 ### Breaking Changes

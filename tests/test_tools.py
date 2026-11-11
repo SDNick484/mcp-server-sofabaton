@@ -79,6 +79,12 @@ async def call(c: Client, name: str, args: dict | None = None) -> dict:
 
 
 # --- tools/list ----------------------------------------------------------------------------
+async def test_initialize_reports_the_package_version(mcp_client):
+    from sofabaton_mcp import __version__
+
+    assert mcp_client.server_info.version == __version__
+
+
 async def test_tool_names(mcp_client):
     assert set(await tools(mcp_client)) == TOOL_NAMES
 

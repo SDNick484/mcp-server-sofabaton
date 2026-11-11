@@ -42,6 +42,10 @@ jobs:
           python -m venv /tmp/v && /tmp/v/bin/pip install "$(ls dist/*.whl)"  # no extras: MQTT must come with it
           /tmp/v/bin/mcp-server-sofabaton --version
           /tmp/v/bin/python -c "import aiomqtt"
+      # ...and answer an MCP client over stdio with the version being released (scripts/smoke_stdio.py).
+      - run: |
+          version=${GITHUB_REF_NAME#v}
+          SOFABATON_URL=http://127.0.0.1:9 python scripts/smoke_stdio.py --expect-version "$version" --call sofabaton_get_status -- /tmp/v/bin/mcp-server-sofabaton
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
