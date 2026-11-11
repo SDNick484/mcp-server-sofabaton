@@ -26,6 +26,7 @@ from mcp.server import MCPServer
 from pydantic import Field
 from typing_extensions import TypedDict
 
+from . import __version__
 from .api import PressPage, ServerAPI, SofabatonError
 from .client import Outcome, Path, SofabatonClient, Status
 from .config import ButtonName, load_settings
@@ -70,6 +71,7 @@ async def lifespan(_server: MCPServer) -> AsyncIterator[None]:
 
 mcp = MCPServer(
     "sofabaton",
+    version=__version__,  # serverInfo.version in initialize, so a bug report says which build answered
     instructions=(
         "Controls a Sofabaton universal remote hub (X1, X1S or X2). Call sofabaton_get_status first: it gives "
         "the hub's model, the running activity, and `capabilities` and `limitations` for this hub, so you know "

@@ -185,13 +185,16 @@ capture for `tests/fixtures/recorded/`.
 
 ## Use it with an MCP client
 
-Local (stdio): Claude Code and Claude Desktop launch it themselves.
+Local (stdio): Claude Code and Claude Desktop launch it themselves. With
+[uv](https://docs.astral.sh/uv/) installed, `uvx` fetches and runs the published package, so there's no
+venv to manage. In Claude Desktop's `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "sofabaton": {
-      "command": "/path/to/mcp-server-sofabaton/.venv/bin/mcp-server-sofabaton",
+      "command": "uvx",
+      "args": ["mcp-server-sofabaton"],
       "env": {
         "SOFABATON_URL": "http://192.168.1.70:8480",
         "SOFABATON_MQTT_URL": "mqtt://sofabaton:secret@192.168.1.10:1883"
@@ -201,7 +204,16 @@ Local (stdio): Claude Code and Claude Desktop launch it themselves.
 }
 ```
 
-For Claude Code: `claude mcp add sofabaton -e SOFABATON_URL=http://192.168.1.70:8480 -- /path/to/.venv/bin/mcp-server-sofabaton`.
+Or point `command` at the venv you installed into (`~/.venvs/sofabaton/bin/mcp-server-sofabaton`; on
+Windows, `...\Scripts\mcp-server-sofabaton.exe`). Claude Desktop doesn't see your shell's `PATH`, so if it
+can't start `uvx`, give its full path (`which uvx`, or `where uvx` on Windows).
+
+For Claude Code: `claude mcp add sofabaton -e SOFABATON_URL=http://192.168.1.70:8480 -- uvx mcp-server-sofabaton`.
+
+Each client starts its own copy of the server, and each copy sends the X2 one MQTT request at a time. Two
+copies at once (Claude Desktop and Claude Code, say) haven't been tried against a real X2, which once stopped
+answering after a burst of requests ([Tested on](#tested-on)). If you use more than one client, the HTTP
+service below gives them one shared copy.
 
 > [!WARNING]
 > **This server turns your devices on and off. Don't put it on a network you don't trust without
