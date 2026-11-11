@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-10
+
 ### Breaking Changes
 
 - **Tool Namespacing:** All 10 MCP tools are now prefixed with `sofabaton_` (`sofabaton_get_status`, `sofabaton_list_activities`, `sofabaton_list_devices`, `sofabaton_list_commands`, `sofabaton_start_activity`, `sofabaton_power_off`, `sofabaton_press_button`, `sofabaton_send_command`, `sofabaton_find_remote`, `sofabaton_get_recent_presses`) to avoid naming collisions in MCP clients when run alongside sibling smart home servers.
