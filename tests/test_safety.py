@@ -15,7 +15,7 @@ from sofabaton_mcp.client import SofabatonClient
 from sofabaton_mcp.config import MqttSettings, Settings, load_settings
 from sofabaton_mcp.limits import ACTIVITY_CAPACITY, PRESS_CAPACITY
 from sofabaton_mcp.logsafe import RedactingFormatter, redact
-from sofabaton_mcp.ratelimit import TokenBucket
+from sofabaton_mcp.ratelimit import TokenBucket, WindowLimit
 
 from .conftest import HUB, MUSIC, WATCH_SHIELD
 
@@ -77,14 +77,80 @@ async def test_press_rate_limit_refuses_whole_calls(make, fake):
     c = make()
     clock = Clock()
     c.press_bucket = TokenBucket(PRESS_CAPACITY, 4.0, clock)
-    await c.press("VOL_UP", None, repeat=10)
-    await c.press("VOL_UP", None, repeat=10)
-    with pytest.raises(SofabatonError, match=r"Rate limit: refusing to press VOL_UP x5 \(try again in 1s\)"):
-        await c.press("VOL_UP", None, repeat=5)
-    assert len(fake.sends()) == 20  # nothing of the refused call went out: no half "volume up x5"
+    await c.press("VOL_DOWN", None, repeat=10)
+    await c.press("VOL_DOWN", None, repeat=10)
+    with pytest.raises(SofabatonError, match=r"Rate limit: refusing to press VOL_DOWN x5 \(try again in 1s\)"):
+        await c.press("VOL_DOWN", None, repeat=5)
+    assert len(fake.sends()) == 20  # nothing of the refused call went out: no half "volume down x5"
     clock.now += 1.25
-    await c.press("VOL_UP", None, repeat=5)
+    await c.press("VOL_DOWN", None, repeat=5)
     assert len(fake.sends()) == 25
+
+
+# --- the volume-up cap -------------------------------------------------------------------------
+# A hub can't read the receiver's level, so every volume-up press makes it louder whatever the level
+# already is. WindowLimit itself is tested in test_ratelimit.py (shared); these test how the hub uses it.
+def capped(c: SofabatonClient, limit: int = 20) -> Clock:
+    clock = Clock()
+    c.volume_up_window = WindowLimit(limit, 300, clock)
+    c.press_bucket = TokenBucket(100, 100.0)  # out of the way: this is about the window
+    return clock
+
+
+async def test_volume_up_is_capped_per_window(make, fake):
+    fake.running = WATCH_SHIELD
+    c = make()
+    clock = capped(c)
+    await c.press("VOL_UP", None, repeat=10)
+    await c.press("VOL_UP", None, repeat=10)
+    clock.now += 299
+    with pytest.raises(SofabatonError) as refused:
+        await c.press("VOL_UP", None)
+    message = str(refused.value)
+    for expected in [
+        "at most 20 volume-up presses in any 5 minutes",
+        "try again in 1s",
+        "onkyo_set_volume",
+        "webos_set_volume",
+        "max_volume",
+    ]:
+        assert expected in message, expected
+    assert len(fake.sends()) == 20  # the refused press was not sent
+    clock.now += 1
+    await c.press("VOL_UP", None, repeat=10)  # the first ten have left the window
+
+
+async def test_named_volume_up_commands_share_the_cap(make, fake):
+    c = make()
+    capped(c, limit=3)
+    await c.press("VOL_UP", "Watch Shield", repeat=2)
+    with pytest.raises(SofabatonError, match="refusing to send Volume Up x2"):
+        await c.send_command("volume up", "Onkyo Receiver", repeat=2)
+    await c.send_command("Volume Up", "Onkyo Receiver")
+    assert len(fake.sends()) == 3
+
+
+async def test_volume_down_and_mute_are_never_capped(make, fake):
+    fake.running = WATCH_SHIELD
+    c = make()
+    capped(c, limit=1)
+    await c.press("VOL_UP", None)
+    await c.press("VOL_DOWN", None, repeat=3)
+    await c.press("MUTE", None)
+    assert len(fake.sends()) == 5
+
+
+async def test_volume_up_refused_by_the_press_limit_is_not_counted(make, fake):
+    fake.running = WATCH_SHIELD
+    c = make()
+    capped(c, limit=5)
+    clock = Clock()
+    c.press_bucket = TokenBucket(3, 1.0, clock)
+    with pytest.raises(SofabatonError, match="Rate limit"):
+        await c.press("VOL_UP", None, repeat=4)
+    await c.press("VOL_UP", None, repeat=3)
+    clock.now += 2
+    await c.press("VOL_UP", None, repeat=2)  # 5 in the window: the refused 4 never counted
 
 
 async def test_activity_rate_limit(make, fake):
@@ -139,6 +205,8 @@ async def test_caps(make, fake, repeat, delay_ms, match):
         ("SOFABATON_MQTT_SETTLE_S", "soon", "should be seconds, 0-120"),
         ("SOFABATON_MQTT_SETTLE_S", "500", "should be seconds, 0-120"),
         ("SOFABATON_MQTT_PASSWORD_FILE", "/nonexistent/pw", "can't read SOFABATON_MQTT_PASSWORD_FILE"),
+        ("SOFABATON_VOLUME_UP_LIMIT", "50", "SOFABATON_VOLUME_UP_LIMIT '50' should be a whole number, 1-20"),
+        ("SOFABATON_VOLUME_UP_LIMIT", "lots", "should be a whole number, 1-20"),
     ],
 )
 def test_config_problems_are_named(env, monkeypatch, var, value, problem):
@@ -223,3 +291,11 @@ def test_log_records_are_redacted():
 def test_mqtt_settings_repr_hides_the_password():
     m = MqttSettings("broker", 1883, False, "u", "hunter2", "02AB34CD56EF")
     assert "hunter2" not in repr(m)
+
+
+def test_volume_up_limit_setting(env, monkeypatch):
+    assert load_settings().volume_up_limit == 20
+    monkeypatch.setenv("SOFABATON_VOLUME_UP_LIMIT", "6")
+    assert load_settings().volume_up_limit == 6
+    monkeypatch.setenv("SOFABATON_VOLUME_UP_LIMIT", "0")
+    assert load_settings().volume_up_limit == 20  # out of range: the default, and a problem

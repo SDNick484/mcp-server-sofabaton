@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Literal, get_args
 from urllib.parse import unquote, urlparse
 
+from .limits import VOLUME_UP_LIMIT
 from .protocol import normalize_mac
 
 DEFAULT_URL = "http://localhost:8480"
@@ -160,6 +161,8 @@ class Settings:
     # The hub's IPv4 address, for find_remote without a server (direct.py); None: not set up.
     hub_ip: str | None = None
     direct_port: int = DEFAULT_DIRECT_PORT  # TCP port we listen on for the hub's connect-back
+    # Volume-up presses allowed in any VOLUME_UP_WINDOW (limits.py); SOFABATON_VOLUME_UP_LIMIT can only lower it.
+    volume_up_limit: int = VOLUME_UP_LIMIT
     problems: tuple[str, ...] = ()
 
 
@@ -263,6 +266,16 @@ def load_settings() -> Settings:
             problems.append(f"SOFABATON_MQTT_SETTLE_S {settle_raw!r} should be seconds, 0-120; using 6")
             settle = 6.0
     hub_ip, direct_port = _direct(env, url, problems)
+    volume_up_limit = VOLUME_UP_LIMIT
+    volume_raw = env.get("SOFABATON_VOLUME_UP_LIMIT")
+    if volume_raw:
+        if volume_raw.strip().isdigit() and 1 <= int(volume_raw) <= VOLUME_UP_LIMIT:
+            volume_up_limit = int(volume_raw)
+        else:
+            problems.append(
+                f"SOFABATON_VOLUME_UP_LIMIT {volume_raw!r} should be a whole number, 1-{VOLUME_UP_LIMIT}; "
+                f"using {VOLUME_UP_LIMIT}"
+            )
     return Settings(
         url=url,
         hub=env.get("SOFABATON_HUB") or None,
@@ -271,5 +284,6 @@ def load_settings() -> Settings:
         settle_s=settle,
         hub_ip=hub_ip,
         direct_port=direct_port,
+        volume_up_limit=volume_up_limit,
         problems=tuple(problems),
     )
