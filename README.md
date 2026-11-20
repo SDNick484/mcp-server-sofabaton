@@ -135,6 +135,7 @@ client's config):
 | `SOFABATON_HUB_IP`              | *(off)*                 | MQTT only, X2: the hub's IPv4 address, so `find_remote` works without a server  |
 | `SOFABATON_DIRECT_PORT`         | `8200`                  | TCP port the hub connects back to for that. Must be free and reachable from the hub |
 | `SOFABATON_DRY_RUN`             | off                     | Read the hub, send nothing that changes anything (`serve --dry-run` too)        |
+| `SOFABATON_VOLUME_UP_LIMIT`     | `20`                    | Volume-up presses allowed in any 5 minutes, 1-20                                |
 | `SOFABATON_LOG_UNREDACTED`      | off                     | Don't mask IPs and MACs in logs (`--no-redact`); passwords and other secrets stay masked |
 
 There is deliberately no sofabaton-x-server token setting. Bad values are reported by name at
@@ -354,6 +355,11 @@ or the server's control panel: that's editing the hub, which this server doesn't
 - **Rate limits and caps.** Per call: at most 10 repeats, 100-2000 ms apart. Across calls (a
   model in a loop): 20 presses in a burst, then 4 a second; 4 activity changes in a burst, then
   one per 15 s. A call over the limit is refused whole, never half-sent.
+- **Volume up is capped: at most 20 presses in any 5 minutes**, counting the `VOL_UP` button and
+  commands named like "Volume Up". A hub can't read the receiver's level, so every press is one step
+  louder; the receiver's own server caps a level it is set to (`max_volume`), but not presses sent
+  through the hub. Volume down and mute are never limited. `SOFABATON_VOLUME_UP_LIMIT` lowers the cap
+  (1-20). A macro that presses volume up inside the hub isn't seen, so it isn't counted.
 - **Dry run.** `serve --dry-run` (or `call --dry-run`) reads the hub and reports what it would
   send.
 - **Logs are redacted**: IP addresses and MACs (unless `--no-redact`), and always secrets (passwords
@@ -376,6 +382,7 @@ or the server's control panel: that's editing the hub, which this server doesn't
 | `the MQTT broker at ... rejected the login`                | Wrong user or password in `SOFABATON_MQTT_URL`                                             |
 | `power macro may still be running`                         | Expected for a few seconds after a change over MQTT                                        |
 | `Rate limit: refusing to ...`                              | Many presses in a short time. Wait and retry if it was deliberate                          |
+| `Volume-up limit: refusing to ...`                         | 20 volume-up presses in 5 minutes. Set a level with the receiver's or TV's own volume tool |
 
 ## Development
 

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Volume up is capped: at most 20 presses in any 5 minutes, counting the `VOL_UP` button (`sofabaton_press_button`) and commands named like "Volume Up" (`sofabaton_send_command`), across calls. A hub sends blind IR and can't read the level, so the receiver's own `max_volume` never saw these presses. Over the limit, the call is refused whole and points to the receiver's or TV's own volume tool. Volume down and mute are never limited. `SOFABATON_VOLUME_UP_LIMIT` lowers the cap (1-20). Uses the shared `WindowLimit` (shared `ratelimit.py` synced).
 - `initialize` reports the package version as `serverInfo.version` (it was empty), so a bug report says which build answered.
 - `scripts/smoke_stdio.py`: launches an installed server over stdio as an MCP client does and checks the first exchange. CI's new `wheel-smoke` job runs it against the built wheel on Linux, macOS and Windows; the release workflow runs it before publishing.
 

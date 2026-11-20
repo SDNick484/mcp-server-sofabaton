@@ -50,11 +50,13 @@ from .limits import (
     MIN_DELAY_MS,
     PRESS_CAPACITY,
     PRESS_RATE,
+    VOLUME_UP_NAMES,
+    VOLUME_UP_WINDOW,
 )
 from .logsafe import mask_host_port, mask_url
 from .lookup import unknown_with_suggestions
 from .mqtt import ClientFactory, MqttHub
-from .ratelimit import TokenBucket, refusal
+from .ratelimit import TokenBucket, WindowLimit, refusal
 from .tasks import stop_task
 
 log = logging.getLogger(__name__)
@@ -153,6 +155,7 @@ class SofabatonClient:
         self._mqtt_grace_used = False
         self.press_bucket = TokenBucket(PRESS_CAPACITY, PRESS_RATE)
         self.activity_bucket = TokenBucket(ACTIVITY_CAPACITY, ACTIVITY_RATE)
+        self.volume_up_window = WindowLimit(settings.volume_up_limit, VOLUME_UP_WINDOW)
         # find_remote without a server. Settings only keep hub_ip when no server is configured.
         self.direct = DirectHub(settings.hub_ip, settings.direct_port) if settings.hub_ip else None
 
@@ -623,6 +626,29 @@ class SofabatonClient:
             # No device name: one server, one hub.
             raise SofabatonError(refusal(what, wait))
 
+    def _limit_presses(self, volume_up: bool, n: int, what: str) -> None:
+        """Charge n presses to the press bucket and, for volume up, to the volume-up window (limits.py says why).
+
+        All or nothing: a call refused by either limit counts against neither.
+        """
+        if volume_up:
+            wait = self.volume_up_window.take(n)
+            if wait:
+                window = self.volume_up_window
+                when = "more than that at once" if wait == float("inf") else f"try again in {max(wait, 1):.0f}s"
+                raise SofabatonError(
+                    f"Volume-up limit: refusing to {what}: at most {window.limit} volume-up presses in any "
+                    f"{window.window / 60:.0f} minutes ({when}). A hub can't read the volume, so this caps how much "
+                    "louder it can make things. To set a level directly, use the receiver's or TV's own volume tool "
+                    "(onkyo_set_volume, webos_set_volume), which is capped at its max_volume."
+                )
+        try:
+            self._limit(self.press_bucket, n, what)
+        except SofabatonError:
+            if volume_up:
+                self.volume_up_window.refund(n)  # nothing was sent, so nothing got louder
+            raise
+
     def _check_settle(self, path: Path) -> None:
         """ASSUMPTION S-MQTT-SETTLE: over MQTT nothing says when a power macro ends, so wait out a window."""
         if path != "mqtt":
@@ -759,7 +785,7 @@ class SofabatonClient:
                 "activity, or use send_command for this device's own commands."
             )
         self._check_settle(path)
-        self._limit(self.press_bucket, repeat, f"press {button} x{repeat}")
+        self._limit_presses(button == "VOL_UP", repeat, f"press {button} x{repeat}")
         if path == "server":
             assert self.api is not None
             hub = await self.hub_id()
@@ -798,7 +824,7 @@ class SofabatonClient:
                 )
             )
         self._check_settle(path)
-        self._limit(self.press_bucket, repeat, f"send {opt.label} x{repeat}")
+        self._limit_presses(_norm(opt.label) in VOLUME_UP_NAMES, repeat, f"send {opt.label} x{repeat}")
         if path == "server":
             assert self.api is not None
             hub = await self.hub_id()
