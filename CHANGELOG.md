@@ -4,9 +4,14 @@
 
 ### Added
 
+- Every tool now has an authorization tier (`read`, `power-off`, `everyday` or `costly`), declared with `@tier` from the synced `remote.py`: the five read tools are `read`, `sofabaton_power_off` is `power-off`, and `sofabaton_start_activity`, `sofabaton_press_button`, `sofabaton_send_command` and `sofabaton_find_remote` are `everyday`. None is costly; no tool asks for confirmation. (A costly tool would ask the person to confirm in a prompt, and refuse where the app can't show it; `request_state_security` is passed to `MCPServer` so that works if one is ever added.) A new shared test fails any tool without a tier.
 - Volume up is capped: at most 20 presses in any 5 minutes, counting the `VOL_UP` button (`sofabaton_press_button`) and commands named like "Volume Up" (`sofabaton_send_command`), across calls. A hub sends blind IR and can't read the level, so the receiver's own `max_volume` never saw these presses. Over the limit, the call is refused whole and points to the receiver's or TV's own volume tool. Volume down and mute are never limited. `SOFABATON_VOLUME_UP_LIMIT` lowers the cap (1-20). Uses the shared `WindowLimit` (shared `ratelimit.py` synced).
 - `initialize` reports the package version as `serverInfo.version` (it was empty), so a bug report says which build answered.
 - `scripts/smoke_stdio.py`: launches an installed server over stdio as an MCP client does and checks the first exchange. CI's new `wheel-smoke` job runs it against the built wheel on Linux, macOS and Windows; the release workflow runs it before publishing.
+
+### Changed
+
+- **Behaviour change for automated callers:** a Cloudflare Access service token now gets 403 unless its client ID is in the new `MCP_ALLOWED_SERVICE_TOKENS` (comma-separated), and an admitted token gets only the tiers in the new `MCP_AUTOMATION_TIERS` (default `read,power-off`; `everyday` may be added, `costly` never). People's logins are unaffected. Pulled in with the shared `remote.py` (mcp-server-shared f4719e3).
 
 ### Documentation
 

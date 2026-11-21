@@ -34,7 +34,7 @@ explain the reasoning behind non-obvious changes instead of only making them.
   `TokenBucket` and `refusal`, is shared `ratelimit.py`)
 - **Shared with the siblings; the source of truth is mcp-server-shared.** `src/sofabaton_mcp/remote.py`,
   `logsafe.py`, `tasks.py` (`stop_task`, which `mqtt.py` and `client.py` use), `ratelimit.py`,
-  `scripts/sync_shared.py`, and `tests/test_remote.py`, `test_logsafe.py`, `test_tasks.py`,
+  `scripts/sync_shared.py`, and `tests/test_remote.py`, `test_authorization.py`, `test_logsafe.py`, `test_tasks.py`,
   `test_ratelimit.py` (rendered with this package's name);
   mcp-server-shared's `shared.toml` is the full list. Don't edit them here: change them in
   mcp-server-shared, then run `python scripts/sync_shared.py --update` here and commit the files
@@ -83,6 +83,11 @@ explain the reasoning behind non-obvious changes instead of only making them.
   always).
 - Every tool has a `title`, explicit `ToolAnnotations`, and constrained args. `test_tools.py`
   enforces this. Nothing is destructive.
+- Every tool has `@tier(...)` (from `remote.py`) directly under `@mcp.tool(...)`; the shared
+  `test_authorization.py` fails one without. Tools are `read`, `power-off` or `everyday`; none is `costly`.
+  `press_button` and `send_command` stay `everyday` since a named command can power a device on. The hub
+  volume cap is separate from tiers. Tests call tools through the in-process `Client`, never the bare
+  function (a tiered tool refuses a direct call).
 
 ## sofabaton-x-server facts (checked against 0.2.4, 2026-10)
 
