@@ -31,6 +31,7 @@ from .api import PressPage, ServerAPI, SofabatonError
 from .client import Outcome, Path, SofabatonClient, Status
 from .config import ButtonName, load_settings
 from .limits import MAX_DELAY_MS, MAX_REPEAT, MIN_DELAY_MS
+from .remote import request_state_security, tier
 from .tools import ACT, ACT_IDEMPOTENT, READ_ONLY
 
 log = logging.getLogger(__name__)
@@ -82,6 +83,7 @@ mcp = MCPServer(
         "open) exist only on the X2; on an X1/X1S, close the Sofabaton app if commands are refused."
     ),
     lifespan=lifespan,
+    request_state_security=request_state_security(),  # lets a costly tool ask for confirmation (none here)
 )
 
 # Explicit annotations everywhere from .tools (a tool without them is assumed
@@ -140,6 +142,7 @@ DelayMs = Annotated[
 
 
 @mcp.tool(title="Get hub status", annotations=_READ)
+@tier("read")
 async def sofabaton_get_status() -> Status:
     """Start here. The hub's model, running activity, and what it can do right now.
 
@@ -153,18 +156,21 @@ async def sofabaton_get_status() -> Status:
 
 
 @mcp.tool(title="List activities", annotations=_READ)
+@tier("read")
 async def sofabaton_list_activities() -> list[ActivityInfo]:
     """List the activities set up on the hub, marking the running one."""
     return [{"name": n, "running": on} for n, on in await client().activities()]
 
 
 @mcp.tool(title="List devices", annotations=_READ)
+@tier("read")
 async def sofabaton_list_devices() -> list[DeviceInfo]:
     """List the devices the hub controls."""
     return [{"name": n, "brand": b, "device_class": c} for n, b, c in await client().devices()]
 
 
 @mcp.tool(title="List commands", annotations=_READ)
+@tier("read")
 async def sofabaton_list_commands(target: Target = None) -> CommandList:
     """List the named commands sofabaton_send_command accepts for an activity or device (default: the running activity).
 
@@ -176,6 +182,7 @@ async def sofabaton_list_commands(target: Target = None) -> CommandList:
 
 
 @mcp.tool(title="Start an activity", annotations=_ACT_IDEMPOTENT)
+@tier("everyday")
 async def sofabaton_start_activity(
     activity: Annotated[str, Field(description="Activity name from sofabaton_list_activities, e.g. 'Watch Shield'.")],
 ) -> ActionResult:
@@ -188,6 +195,7 @@ async def sofabaton_start_activity(
 
 
 @mcp.tool(title="Turn the running activity off", annotations=_ACT_IDEMPOTENT)
+@tier("power-off")
 async def sofabaton_power_off() -> ActionResult:
     """Power off the running activity and wait until the hub confirms."""
     outcome, name = await client().power_off()
@@ -195,6 +203,7 @@ async def sofabaton_power_off() -> ActionResult:
 
 
 @mcp.tool(title="Press a remote button", annotations=_ACT)
+@tier("everyday")
 async def sofabaton_press_button(
     button: ButtonName, target: Target = None, repeat: Repeat = 1, delay_ms: DelayMs = None
 ) -> ActionResult:
@@ -208,6 +217,7 @@ async def sofabaton_press_button(
 
 
 @mcp.tool(title="Send a named command", annotations=_ACT)
+@tier("everyday")
 async def sofabaton_send_command(
     command: Annotated[
         str, Field(description="A label from sofabaton_list_commands, e.g. 'Netflix' or 'Input HDMI 2'.")
@@ -225,6 +235,7 @@ async def sofabaton_send_command(
 
 
 @mcp.tool(title="Find the remote", annotations=_ACT)
+@tier("everyday")
 async def sofabaton_find_remote() -> ActionResult:
     """Make the physical remote beep so it can be found. Through sofabaton-x-server (any model), or on an X2
     without a server, directly over the hub's own protocol (SOFABATON_HUB_IP), which works only while the Sofabaton
@@ -234,6 +245,7 @@ async def sofabaton_find_remote() -> ActionResult:
 
 
 @mcp.tool(title="Get recent button presses", annotations=_READ)
+@tier("read")
 async def sofabaton_get_recent_presses(
     after_seq: Annotated[
         int | None, Field(ge=0, description="Only presses newer than this seq (from a previous call's last_seq).")

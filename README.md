@@ -136,6 +136,8 @@ client's config):
 | `SOFABATON_DIRECT_PORT`         | `8200`                  | TCP port the hub connects back to for that. Must be free and reachable from the hub |
 | `SOFABATON_DRY_RUN`             | off                     | Read the hub, send nothing that changes anything (`serve --dry-run` too)        |
 | `SOFABATON_VOLUME_UP_LIMIT`     | `20`                    | Volume-up presses allowed in any 5 minutes, 1-20                                |
+| `MCP_ALLOWED_SERVICE_TOKENS`    | *(none)*                | HTTP only: Cloudflare Access service-token client IDs (comma-separated, e.g. `token-1.access`) allowed in. A service token not listed gets 403 |
+| `MCP_AUTOMATION_TIERS`          | `read,power-off`        | HTTP only: the tiers an admitted service token may use. May add `everyday`; `costly` is refused at startup |
 | `SOFABATON_LOG_UNREDACTED`      | off                     | Don't mask IPs and MACs in logs (`--no-redact`); passwords and other secrets stay masked |
 
 There is deliberately no sofabaton-x-server token setting. Bad values are reported by name at
@@ -280,6 +282,16 @@ service under OpenRC, and an MCP call over HTTP reaching a simulated X2 on both 
 | `sofabaton_find_remote`        | Make the remote beep (the server, or on an X2 with `SOFABATON_HUB_IP` the hub directly)          |
 | `sofabaton_get_recent_presses` | Presses of remote buttons bound to a Wifi Device: the remote as an input to the agent          |
 
+Every tool has an authorization tier, which matters when something other than a person connects
+(a scheduled job using a Cloudflare Access service token): `read` for the `get_`/`list_` tools,
+`power-off` for `sofabaton_power_off`, and `everyday` for starting an activity, pressing a button,
+sending a command and finding the remote. An admitted service token gets `read` and `power-off`
+unless `MCP_AUTOMATION_TIERS` adds `everyday`, and a token whose client ID isn't in
+`MCP_ALLOWED_SERVICE_TOKENS` is refused (403). `sofabaton_press_button` and `sofabaton_send_command`
+are `everyday`, not `power-off`, because a named command can power a device on. People may use every tier.
+**None is costly; no tool asks for confirmation.** (A costly tool, a chore to undo, would ask the person
+to confirm in a prompt the model can't answer, and refuse where the app can't show one.)
+
 Actions return `{outcome: done | unchanged | dry_run, detail, via, sent}`. `sent` lists the
 exact requests or publishes, with the MAC shown as `<MAC>`. When something can't work on this
 hub, the error says why and what would enable it.
@@ -368,6 +380,9 @@ or the server's control panel: that's editing the hub, which this server doesn't
 - **Network topology masking**: Structured tool payloads returned over stdout (`sofabaton_get_status`)
   sanitize internal LAN IPv4 addresses, URLs, and broker endpoints (`x.x.x.<octet>`, `http://x.x.x.<octet>:<port>`),
   preventing LAN topology leakage to the LLM context while preserving loopback (`127.0.0.1`) and hostnames.
+- **A tier on every tool.** Automated callers (service tokens) get only the tiers `MCP_AUTOMATION_TIERS`
+  allows, `read` and `power-off` by default, and only if `MCP_ALLOWED_SERVICE_TOKENS` lists them. This is
+  separate from the volume cap above, which limits everyone. See [Tools](#tools).
 - Every tool has a title and explicit MCP annotations. Nothing is destructive.
 
 ## Troubleshooting
