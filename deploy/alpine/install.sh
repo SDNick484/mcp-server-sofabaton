@@ -8,6 +8,7 @@
 # nothing else):
 #   /opt/mcp-server-sofabaton/venv     the code                           root:root               0755
 #   /opt/mcp-server-sofabaton/run.sh   the service command                root:root               0755
+#   /opt/mcp-server-sofabaton/COMMIT   the installed commit, if any       root:root               0644
 #   /etc/mcp-server-sofabaton/env      every setting (SOFABATON_*,        root:mcp-sofabaton      0640
 #                                        HTTP and Access)
 #   /etc/mcp-server-sofabaton/mqtt-password   the broker password, if any root:mcp-sofabaton     0640
@@ -19,6 +20,8 @@
 # environment variable, so all of them live in the env file, and run.sh runs any
 # subcommand with exactly that environment (run.sh doctor, run.sh check).
 # Re-running upgrades the code and keeps the settings.
+# COMMIT (the SHA installed, and this repo) is what /healthz and /sofabaton/mcp/healthz report; the
+# default SOURCE is pinned to main's current commit first, so the stamp names what pip installed.
 set -eu
 
 SRC="${1:-git+https://github.com/SDNick484/mcp-server-sofabaton}"
@@ -30,10 +33,6 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 
 [ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 1; }
 
-# A git+https URL or a checkout directory; pip takes either as it is. MQTT support
-# (aiomqtt) is a regular dependency, so there's no extra to add.
-SPEC="$SRC"
-
 # python3 and its venv module; git for the default git+https source. Every
 # compiled dependency ships a musl wheel, so no compiler is needed (the smoke
 # test proves it in a stock Alpine container).
@@ -44,6 +43,17 @@ if ! id "$USER_NAME" >/dev/null 2>&1; then
 	adduser -S -D -H -h "$STATE" -s /sbin/nologin -G "$USER_NAME" "$USER_NAME"
 fi
 
+# Which commit SOURCE is, worked out before pip (commit.sh, shared with the sibling servers)
+. "$HERE/commit.sh"
+REPO=SDNick484/mcp-server-sofabaton
+pinned=$(commit_source "$SRC" "$REPO")
+SRC=$(printf '%s\n' "$pinned" | sed -n 1p)
+COMMIT=$(printf '%s\n' "$pinned" | sed -n 2p)
+
+# A git+https URL (pinned to a commit above) or a checkout directory; pip takes either as it is. MQTT
+# support (aiomqtt) is a regular dependency, so there's no extra to add.
+SPEC="$SRC"
+
 python3 -m venv "$PREFIX/venv"
 "$PREFIX/venv/bin/pip" install --quiet --upgrade pip
 "$PREFIX/venv/bin/pip" install --quiet --upgrade "$SPEC"
@@ -51,6 +61,8 @@ python3 -m venv "$PREFIX/venv"
 # and keeps it: re-running this script would upgrade nothing. Reinstall the package itself (not its
 # dependencies) so it always gets the code from SOURCE.
 "$PREFIX/venv/bin/pip" install --quiet --force-reinstall --no-deps "$SPEC"
+# Only now that pip succeeded (set -e stops before this otherwise), so COMMIT never names code that isn't installed
+write_commit "$PREFIX" "$COMMIT" "$REPO"
 install -m 0755 "$HERE/run.sh" "$PREFIX/run.sh"
 
 install -d -m 0750 -o root -g "$USER_NAME" "$ETC"

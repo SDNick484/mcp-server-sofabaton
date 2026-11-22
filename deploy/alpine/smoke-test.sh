@@ -70,6 +70,15 @@ STEP='healthz'
 # through the fake sofabaton-x-server.
 curl -fsS http://127.0.0.1:8714/healthz | grep -q '"via": "server"'
 
+STEP='running commit'
+# Installed from a checkout, so install.sh stamped its HEAD (the copy from the upgrade step, same HEAD),
+# and both health routes report it: the one under the MCP path is the one a tunnel reaches.
+commit=$(git -c safe.directory=/src -C /src rev-parse HEAD)
+[ "$(sed -n 1p /opt/mcp-server-sofabaton/COMMIT)" = "$commit" ]
+[ "$(stat -c '%a %U' /opt/mcp-server-sofabaton/COMMIT)" = "644 root" ]
+curl -fsS http://127.0.0.1:8714/sofabaton/mcp/healthz | grep -q "\"commit\": \"$commit\""
+curl -fsS http://127.0.0.1:8714/healthz | grep -q '"repo": "SDNick484/mcp-server-sofabaton"'
+
 STEP='service user'
 # The process runs as the service user, not root. (busybox ps truncates user
 # names to 8 characters, so ask /proc for the owner of the server's process.)
