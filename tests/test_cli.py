@@ -23,6 +23,12 @@ from .conftest import eventually, in_package
 pytestmark = pytest.mark.anyio
 
 
+@pytest.fixture(autouse=True)
+def no_commit_file(monkeypatch, tmp_path):
+    """No COMMIT file: the one install.sh writes beside a venv would add commit/repo to the exact bodies below."""
+    monkeypatch.setenv(remote.COMMIT_FILE_ENV, str(tmp_path / "absent"))
+
+
 async def healthz(check) -> httpx.Response:
     app = remote.build_app(mcp, remote.HttpConfig(), health_check=check)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as http:

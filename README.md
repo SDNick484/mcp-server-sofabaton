@@ -243,6 +243,9 @@ even with `--bind 0.0.0.0`: for LAN clients, also pass `--public-host <this mach
 200 `{"status": "ok", "hub": "Living Room X2", "via": "server"}` (or `"via": "mqtt"`) while the hub is
 reachable on either path, and 503 `{"status": "degraded", "error": "health check failed"}` when it isn't.
 The 503 body gives no reason, since it's unauthenticated; `sofabaton_get_status` or `doctor` say why.
+`GET /sofabaton/mcp/healthz` answers the same (the one a tunnel that routes only `/sofabaton/mcp`
+reaches), and both report `"commit"` and `"repo"` from `/opt/mcp-server-sofabaton/COMMIT`, which
+`deploy/alpine/install.sh` writes.
 
 ### As an OpenRC service on Alpine (e.g. a Proxmox LXC)
 
