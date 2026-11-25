@@ -121,7 +121,7 @@ async def test_press_button_schema_is_the_allow_list(mcp_client):
     props = (await tools(mcp_client))["sofabaton_press_button"].input_schema["properties"]
     assert set(props["button"]["enum"]) == ALLOWED_BUTTONS
     assert (props["repeat"]["minimum"], props["repeat"]["maximum"]) == (1, 10)
-    assert (props["delay_ms"]["anyOf"][0]["minimum"], props["delay_ms"]["anyOf"][0]["maximum"]) == (100, 2000)
+    assert (props["delay_ms"]["minimum"], props["delay_ms"]["maximum"]) == (100, 2000)
 
 
 async def test_output_schemas_let_the_model_plan(mcp_client):
