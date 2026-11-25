@@ -32,7 +32,7 @@ from .client import Outcome, Path, SofabatonClient, Status
 from .config import ButtonName, load_settings
 from .limits import MAX_DELAY_MS, MAX_REPEAT, MIN_DELAY_MS
 from .remote import request_state_security, tier
-from .tools import ACT, ACT_IDEMPOTENT, READ_ONLY
+from .tools import ACT, ACT_IDEMPOTENT, READ_ONLY, trim_tools
 
 log = logging.getLogger(__name__)
 
@@ -257,3 +257,7 @@ async def sofabaton_get_recent_presses(
     or on an X2 over MQTT. If instance_id changes, the log restarted and older seqs are gone.
     """
     return await client().presses(after_seq, limit)
+
+
+# Every tool is registered by now: shorten what tools/list sends (see tools.py).
+trim_tools(mcp)
